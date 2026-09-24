@@ -268,13 +268,98 @@
   // ---- layout ----
   let view = { s: 1, ox: 0, oy: 0, dpr: 1 };
   let table = null;
+
+  // ---- pixel-art stands (top view) ----
+  const STAND = 70, PX = 5;               // min stand width, logical units per art pixel
+  let stands = null;                      // { layers: [calm, cheerRed, cheerBlue], cols, rows, y0 }
+  function rng(seed) {
+    return () => {
+      seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  const FANS = {
+    shirts: [['#E5483F', '#C9362F', '#F06A5E', '#B52C26'], ['#2F74E0', '#1F5BBE', '#5A92EE', '#24479A']],
+    hair: ['#2B1D14', '#5A3A22', '#C9A15A', '#8A4B2A', '#161616', '#9C9C9C', '#E8B894'],
+    skin: '#E8B894', floor: '#56616D', seat: '#3B4757', back: '#262E38', pants: '#2B323C'
+  };
+  function buildStands() {
+    stands = null;
+    const { s, ox, oy, dpr } = view;
+    const cols = Math.floor((ox / s - RAIL - 4) / PX);
+    if (cols < 6) return;
+    const y0 = Math.floor(-oy / s / PX);
+    const rows = Math.ceil((cvs.height / dpr - oy) / s / PX) - y0;
+    const layers = [0, 1, 2].map(() => { const k = document.createElement('canvas'); k.width = cols * 2; k.height = rows; return k; });
+    const g = layers.map(k => k.getContext('2d'));
+    // k = distance from the pitch in art pixels; left stand is mirrored
+    const put = (li, side, k, y, col) => {
+      if (k >= cols || y >= rows) return;
+      g[li].fillStyle = col;
+      g[li].fillRect(side ? cols + k : cols - 1 - k, y, 1, 1);
+    };
+    for (let side = 0; side < 2; side++) {
+      const rnd = rng(11 + side * 977);
+      const pick = a => a[rnd() * a.length | 0];
+      for (let y = 0; y < rows; y++) { put(0, side, 0, y, '#6E7985'); put(0, side, 1, y, '#4B5663'); }
+      let banner = 0, bannerTeam = 0;
+      for (let cy = 0; cy * 3 < rows; cy++) {
+        const py = cy * 3, ly = (y0 + py + 1.5) * PX;
+        const team = ly < H / 2 ? 1 : 0;
+        const aisle = Math.abs(ly - H / 2) < PX * 2.5 || (cy + 5) % 17 === 0;
+        if (!aisle && banner === 0 && rnd() < .02) { banner = 6 + (rnd() * 4 | 0); bannerTeam = team; }
+        for (let k = 2; k < cols; k += 4) {
+          const cx = (k - 2) / 4;
+          if (aisle) {
+            for (let dx = 0; dx < 4; dx++) for (let dy = 0; dy < 3; dy++) put(0, side, k + dx, py + dy, dx % 2 ? '#5C6773' : '#67727E');
+            continue;
+          }
+          if (banner > 0 && cx < 2) {       // flag draped over the front rows
+            const main = FANS.shirts[bannerTeam][0];
+            for (let dx = 0; dx < 4; dx++) for (let dy = 0; dy < 3; dy++) put(0, side, k + dx, py + dy, (cx === 0 && dx === 3) || (cx === 1 && dx === 0) ? '#F4F4F0' : main);
+            continue;
+          }
+          for (let dy = 0; dy < 3; dy++) put(0, side, k + 3, py + dy, FANS.back);
+          if (rnd() < .07) {                // empty seat
+            for (let dy = 0; dy < 3; dy++) { put(0, side, k, py + dy, FANS.floor); put(0, side, k + 1, py + dy, FANS.seat); put(0, side, k + 2, py + dy, FANS.seat); }
+            continue;
+          }
+          const shirt = rnd() < .15 ? '#EEEEEA' : pick(FANS.shirts[team]);
+          const hair = pick(FANS.hair);
+          put(0, side, k, py, FANS.floor); put(0, side, k, py + 1, FANS.pants); put(0, side, k, py + 2, FANS.floor);
+          for (const dx of [1, 2]) { put(0, side, k + dx, py, shirt); put(0, side, k + dx, py + 1, hair); put(0, side, k + dx, py + 2, shirt); }
+          // cheering pose: hands up, some wave scarves
+          if (rnd() < .85) {
+            if (rnd() < .3) for (let dy = 0; dy < 3; dy++) put(1 + team, side, k, py + dy, dy === 1 ? '#F4F4F0' : FANS.shirts[team][0]);
+            else { put(1 + team, side, k, py, FANS.skin); put(1 + team, side, k, py + 2, FANS.skin); }
+          }
+        }
+        if (banner > 0) banner--;
+      }
+      // rows further from the pitch sit higher and read a touch darker
+      const gx = g[0].createLinearGradient(side ? cols : cols, 0, side ? cols * 2 : 0, 0);
+      gx.addColorStop(0, 'rgba(8,14,20,0)'); gx.addColorStop(1, 'rgba(8,14,20,.3)');
+      g[0].fillStyle = gx; g[0].fillRect(side ? cols : 0, 0, cols, rows);
+    }
+    stands = { layers, cols, rows, y0 };
+  }
+  function drawStands(c, layer) {
+    const { cols, rows, y0 } = stands;
+    const smooth = c.imageSmoothingEnabled;
+    c.imageSmoothingEnabled = false;
+    c.drawImage(layer, 0, 0, cols, rows, -RAIL - 4 - cols * PX, y0 * PX, cols * PX, rows * PX);
+    c.drawImage(layer, cols, 0, cols, rows, W + RAIL + 4, y0 * PX, cols * PX, rows * PX);
+    c.imageSmoothingEnabled = smooth;
+  }
   function resize() {
     const r = app.getBoundingClientRect();
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     cvs.width = Math.max(1, Math.round(r.width * dpr));
     cvs.height = Math.max(1, Math.round(r.height * dpr));
     const tw = W + RAIL * 2, th = H + RAIL * 2, pad = 8;
-    const s = Math.min((r.width - pad * 2) / tw, (r.height - pad * 2) / th);
+    const s = Math.min(r.width / (tw + STAND * 2), (r.height - pad * 2) / th);
     view = { s, dpr, ox: (r.width - tw * s) / 2 + RAIL * s, oy: (r.height - th * s) / 2 + RAIL * s };
     buildTable();
   }
@@ -295,6 +380,9 @@
     const c = table.getContext('2d');
     const { s, ox, oy, dpr } = view;
     c.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
+
+    buildStands();
+    if (stands) drawStands(c, stands.layers[0]);
 
     // stadium boards
     rr(c, -RAIL, -RAIL, W + RAIL * 2, H + RAIL * 2, 46);
@@ -633,6 +721,7 @@
     ctx.fillStyle = COL.ground; ctx.fillRect(0, 0, cvs.width, cvs.height);
     ctx.drawImage(table, sx * dpr, sy * dpr);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (ox + sx), dpr * (oy + sy));
+    if (stands && S.state === 'play' && S.goalT > 0 && ((S.goalT * 8) | 0) % 2 === 0) drawStands(ctx, stands.layers[1 + S.scorer]);
 
     if (S.state !== 'menu') {
       const flip = S.mode === '2p';
