@@ -39,7 +39,16 @@
     -webkit-user-select: none; user-select: none;
     -webkit-tap-highlight-color: transparent;
   }
-  #app { position: relative; height: 100%; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  .topbar {
+    flex: none;
+    display: grid; grid-template-columns: 42px 1fr 42px; align-items: center; gap: 12px;
+    min-height: 58px; padding: 8px 16px;
+    background: #0F1F16;
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar .logo { grid-column: 2; justify-self: center; display: block; height: 32px; width: auto; max-width: 100%; }
+  #app { position: relative; flex: 1; min-height: 0; overflow: hidden; }
   #c { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
 
   .overlay {
@@ -101,30 +110,32 @@
   .final .r { color: var(--red); } .final .b { color: var(--blue); } .final .sep { color: var(--muted); font-size: 40px; }
 
   .hud {
-    position: absolute; top: 10px; z-index: 2;
     width: 42px; height: 42px; border-radius: 50%;
     display: grid; place-items: center;
     background: rgba(13, 21, 30, .72); color: var(--ink);
     border: 1px solid rgba(255, 255, 255, .14); cursor: pointer; padding: 0;
   }
   .hud svg { width: 18px; height: 18px; }
-  #pauseBtn { right: 16px; }
-  #muteBtn { left: 16px; }
+  #muteBtn { grid-column: 1; }
+  #pauseBtn { grid-column: 3; }
   button:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) { .primary, .secondary { transition: none; } }
 </style>
 </head>
 <body>
 
-<div id="app">
-  <canvas id="c" aria-label="Футбольное поле"></canvas>
-
+<header class="topbar">
+  <img class="logo" src="logo.png" alt="Суперлига" width="592" height="124">
   <button id="muteBtn" class="hud" type="button" aria-label="Звук" hidden>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path id="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path id="cross" d="M16 9l6 6M22 9l-6 6" hidden/></svg>
   </button>
   <button id="pauseBtn" class="hud" type="button" aria-label="Пауза" hidden>
     <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
   </button>
+</header>
+
+<div id="app">
+  <canvas id="c" aria-label="Футбольное поле"></canvas>
 
   <div id="menu" class="overlay">
     <div class="panel">
