@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0D151E">
+<meta name="theme-color" content="#0B1711">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,14 +12,14 @@
   *, *::before, *::after { box-sizing: inherit; }
   [hidden] { display: none !important; }
 </style>
-<title>Карманный аэрохоккей</title>
+<title>Карманный аэрофутбол</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Onest:wght@400;600&display=swap">
 <style>
   :root {
     color-scheme: dark;
-    --ground: #0D151E;
+    --ground: #0B1711;
     --rail: #1B2A39;
     --ice: #EEF4F7;
     --red: #E5483F;
@@ -117,7 +117,7 @@
 <body>
 
 <div id="app">
-  <canvas id="c" aria-label="Игровой стол аэрохоккея"></canvas>
+  <canvas id="c" aria-label="Футбольное поле"></canvas>
 
   <button id="muteBtn" class="hud" type="button" aria-label="Звук" hidden>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path id="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path id="cross" d="M16 9l6 6M22 9l-6 6" hidden/></svg>
@@ -129,7 +129,7 @@
   <div id="menu" class="overlay">
     <div class="panel">
       <p class="eyebrow">Матч до 7 голов</p>
-      <h1>Аэро<span>хоккей</span></h1>
+      <h1>Аэро<span>футбол</span></h1>
       <div class="group">
         <span class="label">Соперник</span>
         <div class="seg" id="modeSeg">
@@ -146,7 +146,7 @@
         </div>
       </div>
       <button id="play" class="primary" type="button">Играть</button>
-      <p class="hint" id="hint">Веди красную биту пальцем по нижней половине стола. Бей по шайбе с разгона — сила удара зависит от скорости биты.</p>
+      <p class="hint" id="hint">Веди красную биту пальцем по нижней половине стола. Бей по мячу с разгона — сила удара зависит от скорости биты.</p>
     </div>
   </div>
 
@@ -178,8 +178,8 @@
   const W = 600, H = 1000, GOAL = 210, PR = 26, MR = 42, RAIL = 26;
   const MAXV = 2600, WALL_E = 0.88, HIT_E = 0.92, TARGET = 7;
   const COL = {
-    ground: '#0D151E', rail: '#1B2A39', red: '#E5483F', redDeep: '#A8302A',
-    blue: '#2F74E0', blueDeep: '#1D4E9E', hole: '#C8D7DF', puck: '#161B20'
+    ground: '#0B1711', rail: '#173A24', red: '#E5483F', redDeep: '#A8302A',
+    blue: '#2F74E0', blueDeep: '#1D4E9E', puck: '#161B20'
   };
   const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -285,56 +285,67 @@
     const { s, ox, oy, dpr } = view;
     c.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
 
-    // rail
+    // stadium boards
     rr(c, -RAIL, -RAIL, W + RAIL * 2, H + RAIL * 2, 46);
     const rg = c.createLinearGradient(-RAIL, 0, W + RAIL, 0);
-    rg.addColorStop(0, '#22354A'); rg.addColorStop(.5, COL.rail); rg.addColorStop(1, '#22354A');
+    rg.addColorStop(0, '#1F4A2E'); rg.addColorStop(.5, COL.rail); rg.addColorStop(1, '#1F4A2E');
     c.fillStyle = rg; c.fill();
     c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,.09)'; c.stroke();
 
-    // goal slots
-    c.fillStyle = '#04080C';
-    rr(c, W / 2 - GOAL / 2, -RAIL + 6, GOAL, RAIL + 10, 9); c.fill();
-    rr(c, W / 2 - GOAL / 2, H - 10, GOAL, RAIL + 4, 9); c.fill();
+    // goals with nets
+    [[-RAIL + 4, RAIL + 8], [H - 4, RAIL]].forEach(([y, h]) => {
+      c.save();
+      rr(c, W / 2 - GOAL / 2, y, GOAL, h, 8); c.fillStyle = '#0A1A10'; c.fill(); c.clip();
+      c.strokeStyle = 'rgba(255,255,255,.32)'; c.lineWidth = 1.2; c.beginPath();
+      for (let i = -40; i < GOAL + 40; i += 9) { c.moveTo(W / 2 - GOAL / 2 + i, y); c.lineTo(W / 2 - GOAL / 2 + i + 30, y + h); c.moveTo(W / 2 - GOAL / 2 + i + 30, y); c.lineTo(W / 2 - GOAL / 2 + i, y + h); }
+      c.stroke(); c.restore();
+    });
 
-    // ice surface
+    // grass
     c.save();
     rr(c, 0, 0, W, H, 20);
-    const ig = c.createLinearGradient(0, 0, 0, H);
-    ig.addColorStop(0, '#F5F9FB'); ig.addColorStop(.5, '#EAF1F5'); ig.addColorStop(1, '#F5F9FB');
-    c.fillStyle = ig; c.fill();
+    c.fillStyle = '#3C9447'; c.fill();
     c.clip();
+    const stripe = H / 14;
+    c.fillStyle = '#44A350';
+    for (let i = 0; i < 14; i += 2) c.fillRect(0, i * stripe, W, stripe);
+    const vg = c.createRadialGradient(W / 2, H / 2, H * .2, W / 2, H / 2, H * .75);
+    vg.addColorStop(0, 'rgba(255,255,255,.06)'); vg.addColorStop(1, 'rgba(0,30,10,.18)');
+    c.fillStyle = vg; c.fillRect(0, 0, W, H);
 
-    // air holes
-    c.fillStyle = COL.hole;
-    c.beginPath();
-    for (let y = 16; y < H; y += 28) for (let x = 15 + ((y / 28 | 0) % 2) * 14; x < W; x += 28) {
-      c.moveTo(x + 1.7, y); c.arc(x, y, 1.7, 0, Math.PI * 2);
-    }
-    c.fill();
-
-    // markings
-    c.globalAlpha = .75;
-    c.strokeStyle = COL.blue; c.lineWidth = 4;
-    [H * .25, H * .75].forEach(y => { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); });
-    c.globalAlpha = .9;
-    c.strokeStyle = COL.red; c.lineWidth = 6;
-    c.beginPath(); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke();
-    c.lineWidth = 4;
-    c.beginPath(); c.arc(W / 2, H / 2, 86, 0, Math.PI * 2); c.stroke();
-    c.fillStyle = COL.red; c.beginPath(); c.arc(W / 2, H / 2, 7, 0, Math.PI * 2); c.fill();
-    // creases
-    c.strokeStyle = COL.blue; c.beginPath(); c.arc(W / 2, 0, 132, 0, Math.PI); c.stroke();
-    c.strokeStyle = COL.red; c.beginPath(); c.arc(W / 2, H, 132, Math.PI, Math.PI * 2); c.stroke();
-    c.globalAlpha = 1;
+    // pitch markings
+    const L = 12, gx = W / 2;
+    c.strokeStyle = 'rgba(255,255,255,.88)'; c.fillStyle = 'rgba(255,255,255,.88)'; c.lineWidth = 4;
+    c.strokeRect(L, L, W - L * 2, H - L * 2);
+    c.beginPath(); c.moveTo(L, H / 2); c.lineTo(W - L, H / 2); c.stroke();
+    c.beginPath(); c.arc(gx, H / 2, 86, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.arc(gx, H / 2, 6, 0, Math.PI * 2); c.fill();
+    [1, -1].forEach(dir => {
+      const gy = dir === 1 ? L : H - L;                       // goal line
+      c.strokeRect(gx - 190, dir === 1 ? gy : gy - 150, 380, 150);   // penalty area
+      c.strokeRect(gx - 120, dir === 1 ? gy : gy - 58, 240, 58);     // goal area
+      const spot = gy + dir * 108;
+      c.beginPath(); c.arc(gx, spot, 5, 0, Math.PI * 2); c.fill();
+      const a = Math.acos(42 / 80);                           // arc outside the box
+      c.beginPath();
+      if (dir === 1) c.arc(gx, spot, 80, Math.PI / 2 - a, Math.PI / 2 + a);
+      else c.arc(gx, spot, 80, -Math.PI / 2 - a, -Math.PI / 2 + a);
+      c.stroke();
+      [[L, 0], [W - L, Math.PI / 2]].forEach(([cx, st]) => {  // corner arcs
+        c.beginPath();
+        if (dir === 1) c.arc(cx, gy, 16, st, st + Math.PI / 2);
+        else c.arc(cx, gy, 16, -st - Math.PI / 2, -st);
+        c.stroke();
+      });
+    });
 
     // inner edge shade
     rr(c, 0, 0, W, H, 20);
-    c.lineWidth = 10; c.strokeStyle = 'rgba(20,45,70,.16)'; c.stroke();
+    c.lineWidth = 10; c.strokeStyle = 'rgba(0,30,10,.22)'; c.stroke();
     c.restore();
 
     // goal posts
-    c.fillStyle = '#2C4058';
+    c.fillStyle = '#FFFFFF';
     [[W / 2 - GOAL / 2, 0], [W / 2 + GOAL / 2, 0], [W / 2 - GOAL / 2, H], [W / 2 + GOAL / 2, H]].forEach(([x, y]) => {
       c.beginPath(); c.arc(x, y, 6, 0, Math.PI * 2); c.fill();
     });
@@ -464,6 +475,7 @@
   function movePuck(h) {
     const p = S.puck;
     p.x += p.vx * h; p.y += p.vy * h;
+    p.rot = ((p.rot || 0) + (p.vx - p.vy * .6) * h / PR) % (Math.PI * 2);
     collideMallet(p, S.m[0]); collideMallet(p, S.m[1]);
 
     const gl = W / 2 - GOAL / 2, gr = W / 2 + GOAL / 2;
@@ -547,12 +559,35 @@
     ctx.fillStyle = g; disk(m.x, m.y - 4, 19);
   }
   function drawPuck(p) {
-    ctx.fillStyle = 'rgba(15,40,65,.2)'; disk(p.x + 3, p.y + 6, PR);
-    ctx.fillStyle = COL.puck; disk(p.x, p.y, PR);
-    ctx.strokeStyle = '#3B4957'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(p.x, p.y, PR - 8, 0, Math.PI * 2); ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(p.x, p.y, PR - 2, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
+    const r = PR;
+    ctx.fillStyle = 'rgba(0,30,10,.25)'; disk(p.x + 3, p.y + 6, r);
+    ctx.save();
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = '#FAFAF7'; ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+    ctx.translate(p.x, p.y); ctx.rotate(p.rot || 0);
+    const pent = (cx, cy, size, rot) => {
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = rot + i * Math.PI * 2 / 5;
+        ctx[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * size, cy + Math.sin(a) * size);
+      }
+      ctx.closePath(); ctx.fill();
+    };
+    ctx.fillStyle = '#1B1D22'; ctx.strokeStyle = '#1B1D22'; ctx.lineWidth = 1.6;
+    pent(0, 0, r * .36, -Math.PI / 2);
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + i * Math.PI * 2 / 5;
+      const ix = Math.cos(a) * r * .36, iy = Math.sin(a) * r * .36;
+      const ox = Math.cos(a) * r * .98, oy = Math.sin(a) * r * .98;
+      ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(Math.cos(a) * r * .72, Math.sin(a) * r * .72); ctx.stroke();
+      pent(ox, oy, r * .3, a + Math.PI);
+      const b = a + Math.PI / 5;
+      ctx.beginPath(); ctx.moveTo(Math.cos(b) * r * .62, Math.sin(b) * r * .62); ctx.lineTo(Math.cos(b) * r, Math.sin(b) * r); ctx.stroke();
+    }
+    ctx.restore();
+    const sh = ctx.createRadialGradient(p.x - r * .35, p.y - r * .4, r * .1, p.x, p.y, r);
+    sh.addColorStop(0, 'rgba(255,255,255,.55)'); sh.addColorStop(.5, 'rgba(255,255,255,0)'); sh.addColorStop(1, 'rgba(10,20,30,.35)');
+    ctx.fillStyle = sh; disk(p.x, p.y, r);
   }
   function text(str, x, y, size, color, flip) {
     ctx.save();
@@ -576,15 +611,15 @@
 
     if (S.state !== 'menu') {
       const flip = S.mode === '2p';
-      text(S.score[0], W - 62, H / 2 + 68, 70, 'rgba(229,72,63,.32)');
-      text(S.score[1], W - 62, H / 2 - 68, 70, 'rgba(47,116,224,.32)', flip);
+      text(S.score[0], W - 62, H / 2 + 68, 70, 'rgba(229,72,63,.6)');
+      text(S.score[1], W - 62, H / 2 - 68, 70, 'rgba(47,116,224,.6)', flip);
     }
 
     if (S.puckOn) {
       const t = S.trail;
       for (let i = 0; i < t.length - 1; i++) {
         if (t[i].sp < 350) continue;
-        ctx.fillStyle = `rgba(22,27,32,${(i + 1) / t.length * .12})`;
+        ctx.fillStyle = `rgba(255,255,255,${(i + 1) / t.length * .12})`;
         disk(t[i].x, t[i].y, PR * (.5 + .5 * (i + 1) / t.length));
       }
       drawPuck(S.puck);
@@ -664,7 +699,7 @@
     document.querySelectorAll('#diffSeg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.diff === S.diff));
     $('diffGroup').hidden = S.mode !== 'ai';
     $('hint').textContent = S.mode === 'ai'
-      ? 'Веди красную биту пальцем по нижней половине стола. Бей по шайбе с разгона — сила удара зависит от скорости биты.'
+      ? 'Веди красную биту пальцем по нижней половине стола. Бей по мячу с разгона — сила удара зависит от скорости биты.'
       : 'Положите телефон на стол между собой. Каждый управляет битой на своей половине — можно одновременно.';
     $('cross').toggleAttribute('hidden', !S.muted); $('waves').toggleAttribute('hidden', S.muted);
     ui.muteBtn.setAttribute('aria-label', S.muted ? 'Включить звук' : 'Выключить звук');
