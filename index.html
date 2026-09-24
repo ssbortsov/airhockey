@@ -157,7 +157,7 @@
         </div>
       </div>
       <button id="play" class="primary" type="button">Играть</button>
-      <p class="hint" id="hint">Веди красную биту пальцем по нижней половине стола. Бей по мячу с разгона — сила удара зависит от скорости биты.</p>
+      <p class="hint" id="hint">Веди своего футболиста пальцем по нижней половине поля. Бей по мячу с разбега — сила удара зависит от скорости.</p>
     </div>
   </div>
 
@@ -569,6 +569,20 @@
     g.addColorStop(0, 'rgba(255,255,255,.75)'); g.addColorStop(.35, main); g.addColorStop(1, deep);
     ctx.fillStyle = g; disk(m.x, m.y - 4, 19);
   }
+  const SPRITES = { front: new Image(), back: new Image() };
+  SPRITES.front.src = 'player-front.png';   // blue, top
+  SPRITES.back.src = 'player-back.png';     // red, bottom
+  function drawPlayer(m, img, main, deep) {
+    if (!img.complete || !img.naturalWidth) return drawMallet(m, main, deep);
+    // team-coloured base marks the hit area
+    ctx.fillStyle = 'rgba(0,30,10,.3)';
+    ctx.beginPath(); ctx.ellipse(m.x + 3, m.y + MR * .75, MR * .8, MR * .28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = .28; ctx.fillStyle = main; disk(m.x, m.y, MR);
+    ctx.globalAlpha = 1; ctx.strokeStyle = main; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(m.x, m.y, MR - 1.5, 0, Math.PI * 2); ctx.stroke();
+    const h = 118, w = h * img.naturalWidth / img.naturalHeight;
+    ctx.drawImage(img, m.x - w / 2, m.y + MR * .95 - h, w, h);
+  }
   function drawPuck(p) {
     const r = PR;
     ctx.fillStyle = 'rgba(0,30,10,.25)'; disk(p.x + 3, p.y + 6, r);
@@ -633,10 +647,14 @@
         ctx.fillStyle = `rgba(255,255,255,${(i + 1) / t.length * .12})`;
         disk(t[i].x, t[i].y, PR * (.5 + .5 * (i + 1) / t.length));
       }
-      drawPuck(S.puck);
     }
-    drawMallet(S.m[0], COL.red, COL.redDeep);
-    drawMallet(S.m[1], COL.blue, COL.blueDeep);
+    // draw back-to-front so whoever is lower on screen overlaps the rest
+    const items = [
+      { y: S.m[0].y, draw: () => drawPlayer(S.m[0], SPRITES.back, COL.red, COL.redDeep) },
+      { y: S.m[1].y, draw: () => drawPlayer(S.m[1], SPRITES.front, COL.blue, COL.blueDeep) }
+    ];
+    if (S.puckOn) items.push({ y: S.puck.y, draw: () => drawPuck(S.puck) });
+    items.sort((a, b) => a.y - b.y).forEach(it => it.draw());
 
     if (S.goalT > 0 && S.state !== 'menu') {
       const k = 1 - S.goalT / S.goalDur;
@@ -710,8 +728,8 @@
     document.querySelectorAll('#diffSeg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.diff === S.diff));
     $('diffGroup').hidden = S.mode !== 'ai';
     $('hint').textContent = S.mode === 'ai'
-      ? 'Веди красную биту пальцем по нижней половине стола. Бей по мячу с разгона — сила удара зависит от скорости биты.'
-      : 'Положите телефон на стол между собой. Каждый управляет битой на своей половине — можно одновременно.';
+      ? 'Веди своего футболиста пальцем по нижней половине поля. Бей по мячу с разбега — сила удара зависит от скорости.'
+      : 'Положите телефон на стол между собой. Каждый управляет своим футболистом на своей половине — можно одновременно.';
     $('cross').toggleAttribute('hidden', !S.muted); $('waves').toggleAttribute('hidden', S.muted);
     ui.muteBtn.setAttribute('aria-label', S.muted ? 'Включить звук' : 'Выключить звук');
   }
