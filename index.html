@@ -139,7 +139,7 @@
 
   <div id="menu" class="overlay">
     <div class="panel">
-      <p class="eyebrow">Матч до 7 голов</p>
+      <p class="eyebrow">2 тайма по 1 минуте</p>
       <h1>Аэро<span>футбол</span></h1>
       <div class="group" id="diffGroup">
         <span class="label">Сложность</span>
@@ -156,10 +156,20 @@
 
   <div id="pause" class="overlay" hidden>
     <div class="panel">
-      <p class="eyebrow">Пауза</p>
+      <p class="eyebrow" id="pauseEyebrow">Пауза</p>
       <div class="final"><span class="r" id="pR">0</span><span class="sep">:</span><span class="b" id="pB">0</span></div>
       <button id="resume" class="primary" type="button">Продолжить</button>
       <button id="quit" class="secondary" type="button">В меню</button>
+    </div>
+  </div>
+
+  <div id="half" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow">Конец 1-го тайма</p>
+      <h2>Перерыв</h2>
+      <div class="final"><span class="r" id="hR">0</span><span class="sep">:</span><span class="b" id="hB">0</span></div>
+      <button id="secondHalf" class="primary" type="button">2-й тайм</button>
+      <button id="quitHalf" class="secondary" type="button">В меню</button>
     </div>
   </div>
 
@@ -180,7 +190,7 @@
 (() => {
   // ---- constants (logical table units) ----
   const W = 600, H = 1000, GOAL = 210, PR = 26, MR = 42, RAIL = 26;
-  const MAXV = 2600, WALL_E = 0.88, HIT_E = 0.92, TARGET = 7;
+  const MAXV = 2600, WALL_E = 0.88, HIT_E = 0.92, HALF_LEN = 60;
   const COL = {
     ground: '#0B1711', rail: '#173A24', red: '#E5483F', redDeep: '#A8302A',
     blue: '#2F74E0', blueDeep: '#1D4E9E', puck: '#161B20'
@@ -205,6 +215,7 @@
       { x: W / 2, y: 120, tx: W / 2, ty: 120, vx: 0, vy: 0, maxV: 800 }
     ],
     goalT: 0, goalDur: 1.3, scorer: -1,
+    half: 1, clock: HALF_LEN,
     aim: [W / 2, W / 2], aimSet: [false, false],
     trail: [], shake: 0, stall: 0, muted: false
   };
@@ -610,7 +621,6 @@
     S.puckOn = true; S.stall = 0;
   }
   function afterGoal() {
-    if (S.state === 'play' && S.score[S.scorer] >= TARGET) return endMatch(S.scorer);
     serve(1 - S.scorer);
   }
 
@@ -624,6 +634,7 @@
       if (S.puckOn) movePuck(h);
     }
     if (S.goalT > 0) { S.goalT -= dt; if (S.goalT <= 0) afterGoal(); }
+    if (S.state === 'play') tickClock(dt);
     if (S.shake > 0) S.shake -= dt;
 
     const p = S.puck;
@@ -719,6 +730,9 @@
       const flip = S.mode === '2p';
       text(S.score[0], W - 62, H / 2 + 68, 70, 'rgba(229,72,63,.6)');
       text(S.score[1], W - 62, H / 2 - 68, 70, 'rgba(47,116,224,.6)', flip);
+      const secs = Math.ceil(S.clock), late = secs <= 10;
+      text(fmtClock(S.clock), 78, H / 2 - 40, 44, late ? 'rgba(255,214,90,.95)' : 'rgba(255,255,255,.8)');
+      text(S.half + '-й тайм', 78, H / 2 + 34, 20, 'rgba(255,255,255,.7)');
     }
 
     if (S.puckOn) {
@@ -760,13 +774,14 @@
 
   // ---- flow & UI ----
   const ui = {
-    menu: $('menu'), pause: $('pause'), over: $('over'),
+    menu: $('menu'), pause: $('pause'), over: $('over'), half: $('half'),
     pauseBtn: $('pauseBtn'), muteBtn: $('muteBtn')
   };
   function show(name) {
     ui.menu.hidden = name !== 'menu';
     ui.pause.hidden = name !== 'paused';
     ui.over.hidden = name !== 'over';
+    ui.half.hidden = name !== 'half';
     ui.pauseBtn.hidden = ui.muteBtn.hidden = name !== 'play';
   }
   function resetPositions() {
@@ -776,26 +791,66 @@
     serve(-1);
   }
   function startMatch() {
-    initAudio(); keepAwake();
+    initAudio(); keepAwake(); whistle(false);
     S.score = [0, 0];
+    S.half = 1; S.clock = HALF_LEN; S.lastSec = HALF_LEN;
     S.state = 'play';
     pointers.clear();
     resetPositions();
+    show('play');
+  }
+  function fmtClock(t) {
+    const n = Math.max(0, Math.ceil(t));
+    return Math.floor(n / 60) + ':' + String(n % 60).padStart(2, '0');
+  }
+  function whistle(long) {
+    tone(2100, long ? .55 : .25, 'square', .06, 1.02);
+    tone(2350, long ? .55 : .25, 'square', .04, .98);
+  }
+  function tickClock(dt) {
+    S.clock -= dt;
+    const sec = Math.ceil(S.clock);
+    if (sec !== S.lastSec) {
+      S.lastSec = sec;
+      if (sec > 0 && sec <= 5) tone(880, .06, 'square', .06);
+    }
+    if (S.clock > 0) return;
+    S.clock = 0; S.goalT = 0; S.puckOn = false;
+    whistle(true); setTimeout(() => whistle(true), 650);
+    buzz([60, 80, 60]);
+    if (S.half === 1) {
+      S.state = 'half';
+      $('hR').textContent = S.score[0]; $('hB').textContent = S.score[1];
+      show('half');
+    } else {
+      const [r, b] = S.score;
+      setTimeout(() => endMatch(r > b ? 0 : b > r ? 1 : -1), 350);
+      S.state = 'over';
+    }
+  }
+  function startSecondHalf() {
+    initAudio(); keepAwake();
+    S.half = 2; S.clock = HALF_LEN; S.lastSec = HALF_LEN;
+    S.state = 'play';
+    pointers.clear(); last = 0;
+    resetPositions();
+    whistle(false);
     show('play');
   }
   function endMatch(winner) {
     S.state = 'over';
     const vsAI = S.mode === 'ai';
     $('overEyebrow').textContent = vsAI ? ['Лёгкий', 'Нормальный', 'Жёсткий'][S.diff] + ' соперник' : 'Матч окончен';
-    $('overTitle').textContent = vsAI ? (winner === 0 ? 'Победа!' : 'Поражение') : (winner === 0 ? 'Красные победили' : 'Синие победили');
+    $('overTitle').textContent = winner === -1 ? 'Ничья' : vsAI ? (winner === 0 ? 'Победа!' : 'Поражение') : (winner === 0 ? 'Красные победили' : 'Синие победили');
     $('fR').textContent = S.score[0]; $('fB').textContent = S.score[1];
-    if (winner === 0 || !vsAI) { tone(523, .12, 'square', .1); tone(659, .12, 'square', .1, 0, .1); tone(784, .12, 'square', .1, 0, .2); tone(1047, .4, 'square', .12, 0, .3); }
+    if (winner === 0 || (!vsAI && winner !== -1)) { tone(523, .12, 'square', .1); tone(659, .12, 'square', .1, 0, .1); tone(784, .12, 'square', .1, 0, .2); tone(1047, .4, 'square', .12, 0, .3); }
     show('over');
   }
   function pauseGame() {
     if (S.state !== 'play') return;
     S.state = 'paused';
     $('pR').textContent = S.score[0]; $('pB').textContent = S.score[1];
+    $('pauseEyebrow').textContent = 'Пауза · ' + S.half + '-й тайм, осталось ' + fmtClock(S.clock);
     show('paused');
   }
   function toMenu() {
@@ -817,6 +872,8 @@
   $('again').addEventListener('click', startMatch);
   $('toMenu').addEventListener('click', toMenu);
   $('quit').addEventListener('click', toMenu);
+  $('quitHalf').addEventListener('click', toMenu);
+  $('secondHalf').addEventListener('click', startSecondHalf);
   $('resume').addEventListener('click', () => { S.state = 'play'; pointers.clear(); last = 0; show('play'); });
   ui.pauseBtn.addEventListener('click', pauseGame);
   ui.muteBtn.addEventListener('click', () => { S.muted = !S.muted; savePrefs(); syncMenu(); initAudio(); });
