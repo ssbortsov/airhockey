@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0D151E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; height: 100%; }
+  *, *::before, *::after { box-sizing: inherit; }
+  [hidden] { display: none !important; }
+</style>
+<title>Карманный аэрохоккей</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Onest:wght@400;600&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --ground: #0D151E;
+    --rail: #1B2A39;
+    --ice: #EEF4F7;
+    --red: #E5483F;
+    --red-deep: #9E2A23;
+    --blue: #2F74E0;
+    --ink: #F1F5F8;
+    --muted: #8DA2B4;
+    --panel: rgba(16, 26, 37, .94);
+    --line: rgba(255, 255, 255, .09);
+  }
+  html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 15px/1.45 "Onest", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app { position: relative; height: 100%; overflow: hidden; }
+  #c { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+
+  .overlay {
+    position: absolute; inset: 0;
+    display: grid; place-items: center;
+    padding: 16px;
+    background: rgba(9, 15, 22, .5);
+    -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+  }
+  .panel {
+    width: min(360px, 100%);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 26px 22px 22px;
+    display: flex; flex-direction: column; gap: 18px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+  }
+  .eyebrow {
+    margin: 0; color: var(--muted);
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+  }
+  h1, h2 {
+    margin: 0; font-family: "Russo One", Impact, "Arial Black", sans-serif; font-weight: 400;
+    text-wrap: balance; line-height: .95;
+  }
+  h1 { font-size: clamp(42px, 13vw, 58px); letter-spacing: -.01em; }
+  h1 span { color: var(--red); }
+  h2 { font-size: 40px; }
+  .group { display: flex; flex-direction: column; gap: 8px; }
+  .label { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .seg {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px;
+    padding: 4px; border-radius: 13px; background: rgba(255, 255, 255, .06);
+  }
+  .seg button {
+    appearance: none; border: 0; border-radius: 10px;
+    padding: 10px 6px; min-height: 42px;
+    background: transparent; color: var(--ink);
+    font: 600 14px/1.1 "Onest", system-ui, sans-serif; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--ice); color: var(--ground); }
+  .primary, .secondary {
+    appearance: none; border: 0; cursor: pointer;
+    min-height: 56px; border-radius: 14px;
+    font: 20px/1 "Russo One", Impact, sans-serif; letter-spacing: .02em;
+    transition: transform .06s, box-shadow .06s;
+  }
+  .primary { background: var(--red); color: #fff; box-shadow: 0 5px 0 var(--red-deep); }
+  .primary:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--red-deep); }
+  .secondary { background: rgba(255, 255, 255, .08); color: var(--ink); box-shadow: 0 5px 0 rgba(0, 0, 0, .35); }
+  .secondary:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0, 0, 0, .35); }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .hint { margin: 0; color: var(--muted); font-size: 13px; }
+  .final {
+    font-family: "Russo One", Impact, sans-serif; font-size: 64px; line-height: 1;
+    font-variant-numeric: tabular-nums; display: flex; gap: 14px; align-items: baseline;
+  }
+  .final .r { color: var(--red); } .final .b { color: var(--blue); } .final .sep { color: var(--muted); font-size: 40px; }
+
+  .hud {
+    position: absolute; top: 10px; z-index: 2;
+    width: 42px; height: 42px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: rgba(13, 21, 30, .72); color: var(--ink);
+    border: 1px solid rgba(255, 255, 255, .14); cursor: pointer; padding: 0;
+  }
+  .hud svg { width: 18px; height: 18px; }
+  #pauseBtn { right: 16px; }
+  #muteBtn { left: 16px; }
+  button:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .primary, .secondary { transition: none; } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="c" aria-label="Игровой стол аэрохоккея"></canvas>
+
+  <button id="muteBtn" class="hud" type="button" aria-label="Звук" hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor"/><path id="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path id="cross" d="M16 9l6 6M22 9l-6 6" hidden/></svg>
+  </button>
+  <button id="pauseBtn" class="hud" type="button" aria-label="Пауза" hidden>
+    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+  </button>
+
+  <div id="menu" class="overlay">
+    <div class="panel">
+      <p class="eyebrow">Матч до 7 голов</p>
+      <h1>Аэро<span>хоккей</span></h1>
+      <div class="group">
+        <span class="label">Соперник</span>
+        <div class="seg" id="modeSeg">
+          <button type="button" id="mode-ai" data-mode="ai" aria-pressed="true">Компьютер</button>
+          <button type="button" id="mode-2p" data-mode="2p" aria-pressed="false">Вдвоём</button>
+        </div>
+      </div>
+      <div class="group" id="diffGroup">
+        <span class="label">Сложность</span>
+        <div class="seg" id="diffSeg">
+          <button type="button" id="diff-0" data-diff="0" aria-pressed="false">Легко</button>
+          <button type="button" id="diff-1" data-diff="1" aria-pressed="true">Нормально</button>
+          <button type="button" id="diff-2" data-diff="2" aria-pressed="false">Жёстко</button>
+        </div>
+      </div>
+      <button id="play" class="primary" type="button">Играть</button>
+      <p class="hint" id="hint">Веди красную биту пальцем по нижней половине стола. Бей по шайбе с разгона — сила удара зависит от скорости биты.</p>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow">Пауза</p>
+      <div class="final"><span class="r" id="pR">0</span><span class="sep">:</span><span class="b" id="pB">0</span></div>
+      <button id="resume" class="primary" type="button">Продолжить</button>
+      <button id="quit" class="secondary" type="button">В меню</button>
+    </div>
+  </div>
+
+  <div id="over" class="overlay" hidden>
+    <div class="panel">
+      <p class="eyebrow" id="overEyebrow">Матч окончен</p>
+      <h2 id="overTitle">Победа!</h2>
+      <div class="final"><span class="r" id="fR">7</span><span class="sep">:</span><span class="b" id="fB">0</span></div>
+      <div class="row">
+        <button id="again" class="primary" type="button">Реванш</button>
+        <button id="toMenu" class="secondary" type="button">Меню</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ---- constants (logical table units) ----
+  const W = 600, H = 1000, GOAL = 210, PR = 26, MR = 42, RAIL = 26;
+  const MAXV = 2600, WALL_E = 0.88, HIT_E = 0.92, TARGET = 7;
+  const COL = {
+    ground: '#0D151E', rail: '#1B2A39', red: '#E5483F', redDeep: '#A8302A',
+    blue: '#2F74E0', blueDeep: '#1D4E9E', hole: '#C8D7DF', puck: '#161B20'
+  };
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const app = document.getElementById('app');
+  const cvs = document.getElementById('c');
+  const ctx = cvs.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+  // ---- state ----
+  const S = {
+    state: 'menu',            // menu (demo) | play | paused | over
+    mode: 'ai', diff: 1,
+    score: [0, 0],            // [red/bottom, blue/top]
+    puck: { x: W / 2, y: H / 2, vx: 0, vy: 0 },
+    puckOn: true,
+    m: [
+      { x: W / 2, y: H - 120, tx: W / 2, ty: H - 120, vx: 0, vy: 0, maxV: 5000 },
+      { x: W / 2, y: 120, tx: W / 2, ty: 120, vx: 0, vy: 0, maxV: 800 }
+    ],
+    goalT: 0, goalDur: 1.3, scorer: -1,
+    aim: [W / 2, W / 2], aimSet: [false, false],
+    trail: [], shake: 0, stall: 0, muted: false
+  };
+
+  try {
+    const p = JSON.parse(localStorage.getItem('airhockey-prefs') || '{}');
+    if (p.mode === 'ai' || p.mode === '2p') S.mode = p.mode;
+    if ([0, 1, 2].includes(p.diff)) S.diff = p.diff;
+    if (typeof p.muted === 'boolean') S.muted = p.muted;
+  } catch (e) {}
+  function savePrefs() {
+    try { localStorage.setItem('airhockey-prefs', JSON.stringify({ mode: S.mode, diff: S.diff, muted: S.muted })); } catch (e) {}
+  }
+
+  // ---- sound ----
+  let ac = null;
+  const lastSnd = {};
+  function initAudio() {
+    try {
+      if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume();
+    } catch (e) {}
+  }
+  function tone(freq, dur, type, vol, slide, delay) {
+    if (!ac || S.muted) return;
+    const t = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'triangle';
+    o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, freq * slide), t + dur);
+    g.gain.setValueAtTime(vol || .15, t);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    o.connect(g).connect(ac.destination);
+    o.start(t); o.stop(t + dur + .03);
+  }
+  function snd(kind, power) {
+    if (S.state === 'menu') return;
+    const now = performance.now();
+    if (now - (lastSnd[kind] || 0) < 45) return;
+    lastSnd[kind] = now;
+    const k = clamp(power / 1600, 0, 1);
+    if (kind === 'hit') tone(260 + k * 380, .09, 'square', .05 + k * .1, .45);
+    else if (kind === 'wall') tone(150 + k * 120, .07, 'triangle', .06 + k * .12, .6);
+    else if (kind === 'goal') { tone(523, .14, 'square', .1); tone(659, .14, 'square', .1, 0, .12); tone(784, .3, 'square', .12, 0, .24); }
+    else if (kind === 'lose') { tone(330, .18, 'sawtooth', .08, .7); tone(220, .35, 'sawtooth', .08, .6, .16); }
+  }
+  function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+
+  let wakeLock = null;
+  async function keepAwake() {
+    try { if (navigator.wakeLock && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) {}
+  }
+
+  // ---- layout ----
+  let view = { s: 1, ox: 0, oy: 0, dpr: 1 };
+  let table = null;
+  function resize() {
+    const r = app.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    cvs.width = Math.max(1, Math.round(r.width * dpr));
+    cvs.height = Math.max(1, Math.round(r.height * dpr));
+    const tw = W + RAIL * 2, th = H + RAIL * 2, pad = 8;
+    const s = Math.min((r.width - pad * 2) / tw, (r.height - pad * 2) / th);
+    view = { s, dpr, ox: (r.width - tw * s) / 2 + RAIL * s, oy: (r.height - th * s) / 2 + RAIL * s };
+    buildTable();
+  }
+
+  function rr(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function buildTable() {
+    table = document.createElement('canvas');
+    table.width = cvs.width; table.height = cvs.height;
+    const c = table.getContext('2d');
+    const { s, ox, oy, dpr } = view;
+    c.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
+
+    // rail
+    rr(c, -RAIL, -RAIL, W + RAIL * 2, H + RAIL * 2, 46);
+    const rg = c.createLinearGradient(-RAIL, 0, W + RAIL, 0);
+    rg.addColorStop(0, '#22354A'); rg.addColorStop(.5, COL.rail); rg.addColorStop(1, '#22354A');
+    c.fillStyle = rg; c.fill();
+    c.lineWidth = 2; c.strokeStyle = 'rgba(255,255,255,.09)'; c.stroke();
+
+    // goal slots
+    c.fillStyle = '#04080C';
+    rr(c, W / 2 - GOAL / 2, -RAIL + 6, GOAL, RAIL + 10, 9); c.fill();
+    rr(c, W / 2 - GOAL / 2, H - 10, GOAL, RAIL + 4, 9); c.fill();
+
+    // ice surface
+    c.save();
+    rr(c, 0, 0, W, H, 20);
+    const ig = c.createLinearGradient(0, 0, 0, H);
+    ig.addColorStop(0, '#F5F9FB'); ig.addColorStop(.5, '#EAF1F5'); ig.addColorStop(1, '#F5F9FB');
+    c.fillStyle = ig; c.fill();
+    c.clip();
+
+    // air holes
+    c.fillStyle = COL.hole;
+    c.beginPath();
+    for (let y = 16; y < H; y += 28) for (let x = 15 + ((y / 28 | 0) % 2) * 14; x < W; x += 28) {
+      c.moveTo(x + 1.7, y); c.arc(x, y, 1.7, 0, Math.PI * 2);
+    }
+    c.fill();
+
+    // markings
+    c.globalAlpha = .75;
+    c.strokeStyle = COL.blue; c.lineWidth = 4;
+    [H * .25, H * .75].forEach(y => { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); });
+    c.globalAlpha = .9;
+    c.strokeStyle = COL.red; c.lineWidth = 6;
+    c.beginPath(); c.moveTo(0, H / 2); c.lineTo(W, H / 2); c.stroke();
+    c.lineWidth = 4;
+    c.beginPath(); c.arc(W / 2, H / 2, 86, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = COL.red; c.beginPath(); c.arc(W / 2, H / 2, 7, 0, Math.PI * 2); c.fill();
+    // creases
+    c.strokeStyle = COL.blue; c.beginPath(); c.arc(W / 2, 0, 132, 0, Math.PI); c.stroke();
+    c.strokeStyle = COL.red; c.beginPath(); c.arc(W / 2, H, 132, Math.PI, Math.PI * 2); c.stroke();
+    c.globalAlpha = 1;
+
+    // inner edge shade
+    rr(c, 0, 0, W, H, 20);
+    c.lineWidth = 10; c.strokeStyle = 'rgba(20,45,70,.16)'; c.stroke();
+    c.restore();
+
+    // goal posts
+    c.fillStyle = '#2C4058';
+    [[W / 2 - GOAL / 2, 0], [W / 2 + GOAL / 2, 0], [W / 2 - GOAL / 2, H], [W / 2 + GOAL / 2, H]].forEach(([x, y]) => {
+      c.beginPath(); c.arc(x, y, 6, 0, Math.PI * 2); c.fill();
+    });
+  }
+
+  // ---- input ----
+  const pointers = new Map();
+  function toLogical(e) {
+    const r = cvs.getBoundingClientRect();
+    return { x: (e.clientX - r.left - view.ox) / view.s, y: (e.clientY - r.top - view.oy) / view.s };
+  }
+  function clampTarget(side) {
+    const m = S.m[side];
+    m.tx = clamp(m.tx, MR, W - MR);
+    m.ty = side === 0 ? clamp(m.ty, H / 2 + MR, H - MR) : clamp(m.ty, MR, H / 2 - MR);
+  }
+  function aimHuman(side, p, type) {
+    const off = type === 'touch' ? 38 : 0;   // keep the mallet visible above the finger
+    const m = S.m[side];
+    m.tx = p.x; m.ty = side === 0 ? p.y - off : p.y + off;
+    clampTarget(side);
+  }
+  function humanSide(y) { return S.mode === 'ai' ? 0 : (y > H / 2 ? 0 : 1); }
+
+  cvs.addEventListener('pointerdown', e => {
+    if (S.state !== 'play') return;
+    e.preventDefault();
+    const p = toLogical(e);
+    const side = humanSide(p.y);
+    pointers.set(e.pointerId, side);
+    try { cvs.setPointerCapture(e.pointerId); } catch (err) {}
+    aimHuman(side, p, e.pointerType);
+  });
+  cvs.addEventListener('pointermove', e => {
+    if (S.state !== 'play') return;
+    const p = toLogical(e);
+    if (pointers.has(e.pointerId)) aimHuman(pointers.get(e.pointerId), p, e.pointerType);
+    else if (e.pointerType === 'mouse' && S.mode === 'ai') aimHuman(0, p, 'mouse');
+  });
+  const release = e => pointers.delete(e.pointerId);
+  cvs.addEventListener('pointerup', release);
+  cvs.addEventListener('pointercancel', release);
+  document.addEventListener('touchmove', e => { if (S.state === 'play') e.preventDefault(); }, { passive: false });
+
+  // ---- AI ----
+  function aiTarget(side, d) {
+    const m = S.m[side], p = S.puck;
+    // work in "top-side" perspective, mirror for the bottom
+    const fy = v => side === 1 ? v : H - v;
+    const mx = m.x, my = fy(m.y);
+    const pvx = p.vx, pvy = side === 1 ? p.vy : -p.vy;
+    const lead = [0.03, 0.08, 0.13][d];
+    const px = clamp(p.x + pvx * lead, PR, W - PR);
+    const py = clamp(fy(p.y) + pvy * lead, PR, H - PR);
+    let v = [430, 720, 1060][d], tx, ty;
+
+    const inHalf = fy(p.y) < H / 2;
+    if (inHalf && !S.aimSet[side]) {
+      S.aim[side] = W / 2 + (Math.random() - .5) * GOAL * (d === 2 ? .9 : .5);
+      S.aimSet[side] = true;
+    } else if (!inHalf) S.aimSet[side] = false;
+
+    const reach = H / 2 + [-20, 20, 60][d];
+    if (S.puckOn && py < reach && pvy < 380) {
+      let dx = S.aim[side] - px, dy = H + 80 - py;
+      const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+      const rx = mx - px, ry = my - py;
+      const along = rx * dx + ry * dy, perp = Math.abs(rx * dy - ry * dx);
+      const appY = py - dy * (PR + MR + 12);
+      if ((along < -(PR + MR) * .5 && perp < PR * .9) || appY < MR + 4) {
+        tx = px + dx * 90; ty = py + dy * 90; v *= 1.4;               // strike
+      } else if (my > py - PR * .5) {
+        let sg = mx < px ? -1 : 1;                                       // go around the puck
+        if (px < PR + MR * 2) sg = 1; else if (px > W - PR - MR * 2) sg = -1;
+        tx = px + sg * (PR + MR + 30); ty = py - (PR + MR) * .7;
+      } else {
+        tx = px - dx * (PR + MR + 12); ty = appY;                       // line up behind
+      }
+    } else {
+      tx = W / 2 + (p.x - W / 2) * [0.3, 0.5, 0.62][d];                 // guard the goal
+      ty = [105, 95, 88][d]; v *= .8;
+    }
+    if (d === 0) tx += Math.sin(performance.now() * .003) * 26;
+    return [tx, side === 1 ? ty : H - ty, v];
+  }
+  function driveAI(side, d) {
+    const [tx, ty, v] = aiTarget(side, d);
+    const m = S.m[side];
+    m.tx = tx; m.ty = ty; m.maxV = v;
+    clampTarget(side);
+  }
+
+  // ---- physics ----
+  function moveMallets(h) {
+    for (const m of S.m) {
+      const dx = m.tx - m.x, dy = m.ty - m.y, dist = Math.hypot(dx, dy), step = m.maxV * h;
+      let nx = m.tx, ny = m.ty;
+      if (dist > step) { nx = m.x + dx / dist * step; ny = m.y + dy / dist * step; }
+      m.vx = (nx - m.x) / h; m.vy = (ny - m.y) / h;
+      m.x = nx; m.y = ny;
+    }
+  }
+  function capSpeed(p) {
+    const sp = Math.hypot(p.vx, p.vy);
+    if (sp > MAXV) { p.vx *= MAXV / sp; p.vy *= MAXV / sp; }
+  }
+  function collideMallet(p, m) {
+    const dx = p.x - m.x, dy = p.y - m.y, d = Math.hypot(dx, dy), min = PR + MR;
+    if (d >= min || d < 1e-4) return;
+    const nx = dx / d, ny = dy / d;
+    p.x = m.x + nx * min; p.y = m.y + ny * min;
+    const vn = (p.vx - m.vx) * nx + (p.vy - m.vy) * ny;
+    if (vn < 0) {
+      p.vx -= (1 + HIT_E) * vn * nx; p.vy -= (1 + HIT_E) * vn * ny;
+      capSpeed(p);
+      if (-vn > 60) { snd('hit', -vn); if (-vn > 900) buzz(12); }
+    }
+  }
+  function bouncePoint(p, x, y) {
+    const dx = p.x - x, dy = p.y - y, d = Math.hypot(dx, dy);
+    if (d >= PR || d < 1e-4) return;
+    const nx = dx / d, ny = dy / d;
+    p.x = x + nx * PR; p.y = y + ny * PR;
+    const vn = p.vx * nx + p.vy * ny;
+    if (vn < 0) { p.vx -= (1 + WALL_E) * vn * nx; p.vy -= (1 + WALL_E) * vn * ny; snd('wall', -vn); }
+  }
+  function movePuck(h) {
+    const p = S.puck;
+    p.x += p.vx * h; p.y += p.vy * h;
+    collideMallet(p, S.m[0]); collideMallet(p, S.m[1]);
+
+    const gl = W / 2 - GOAL / 2, gr = W / 2 + GOAL / 2;
+    const inMouth = p.x > gl && p.x < gr;
+    if (p.x < PR) { p.x = PR; if (p.vx < 0) { snd('wall', -p.vx); p.vx = -p.vx * WALL_E; } }
+    if (p.x > W - PR) { p.x = W - PR; if (p.vx > 0) { snd('wall', p.vx); p.vx = -p.vx * WALL_E; } }
+    if (!inMouth) {
+      if (p.y < PR) { p.y = PR; if (p.vy < 0) { snd('wall', -p.vy); p.vy = -p.vy * WALL_E; } }
+      if (p.y > H - PR) { p.y = H - PR; if (p.vy > 0) { snd('wall', p.vy); p.vy = -p.vy * WALL_E; } }
+    }
+    bouncePoint(p, gl, 0); bouncePoint(p, gr, 0); bouncePoint(p, gl, H); bouncePoint(p, gr, H);
+    if (p.y < 0 || p.y > H) p.x = clamp(p.x, gl + PR, gr - PR);
+
+    const f = Math.pow(0.996, h * 60);
+    p.vx *= f; p.vy *= f;
+
+    if (p.y < -PR) goal(0);
+    else if (p.y > H + PR) goal(1);
+  }
+
+  function goal(scorer) {
+    if (!S.puckOn) return;
+    S.puckOn = false;
+    S.scorer = scorer;
+    S.trail.length = 0;
+    if (S.state === 'play') {
+      S.score[scorer]++;
+      S.goalDur = S.goalT = 1.3;
+      if (S.mode === 'ai' && scorer === 1) snd('lose'); else snd('goal');
+      buzz(scorer === 0 || S.mode === '2p' ? [30, 40, 60] : 80);
+      if (!reduceMotion) S.shake = .35;
+    } else {
+      S.goalDur = S.goalT = .6;
+    }
+  }
+  function serve(conceder) {
+    const p = S.puck;
+    p.x = W / 2 + (Math.random() - .5) * 60;
+    p.y = conceder === 0 ? H / 2 + 150 : conceder === 1 ? H / 2 - 150 : H / 2;
+    p.vx = p.vy = 0;
+    S.puckOn = true; S.stall = 0;
+  }
+  function afterGoal() {
+    if (S.state === 'play' && S.score[S.scorer] >= TARGET) return endMatch(S.scorer);
+    serve(1 - S.scorer);
+  }
+
+  function step(dt) {
+    if (S.state === 'menu') { driveAI(0, 1); driveAI(1, 1); }
+    else if (S.mode === 'ai') driveAI(1, S.diff);
+
+    const n = Math.max(1, Math.ceil(dt / 0.004)), h = dt / n;
+    for (let i = 0; i < n; i++) {
+      moveMallets(h);
+      if (S.puckOn) movePuck(h);
+    }
+    if (S.goalT > 0) { S.goalT -= dt; if (S.goalT <= 0) afterGoal(); }
+    if (S.shake > 0) S.shake -= dt;
+
+    const p = S.puck;
+    if (S.state === 'menu' && S.puckOn) {
+      S.stall = Math.hypot(p.vx, p.vy) < 25 ? S.stall + dt : 0;
+      if (S.stall > 3) { p.vx = (Math.random() - .5) * 500; p.vy = (Math.random() - .5) * 700; S.stall = 0; }
+    }
+    if (S.puckOn && !reduceMotion) {
+      S.trail.push({ x: p.x, y: p.y, sp: Math.hypot(p.vx, p.vy) });
+      if (S.trail.length > 9) S.trail.shift();
+    }
+  }
+
+  // ---- drawing ----
+  function disk(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  function drawMallet(m, main, deep) {
+    ctx.fillStyle = 'rgba(15,40,65,.18)'; disk(m.x + 4, m.y + 8, MR);
+    ctx.fillStyle = deep; disk(m.x, m.y, MR);
+    ctx.fillStyle = main; disk(m.x, m.y - 2, MR - 3);
+    ctx.strokeStyle = deep; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(m.x, m.y - 2, MR - 13, 0, Math.PI * 2); ctx.stroke();
+    const g = ctx.createRadialGradient(m.x - 6, m.y - 10, 2, m.x, m.y - 4, 20);
+    g.addColorStop(0, 'rgba(255,255,255,.75)'); g.addColorStop(.35, main); g.addColorStop(1, deep);
+    ctx.fillStyle = g; disk(m.x, m.y - 4, 19);
+  }
+  function drawPuck(p) {
+    ctx.fillStyle = 'rgba(15,40,65,.2)'; disk(p.x + 3, p.y + 6, PR);
+    ctx.fillStyle = COL.puck; disk(p.x, p.y, PR);
+    ctx.strokeStyle = '#3B4957'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(p.x, p.y, PR - 8, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.22)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, PR - 2, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
+  }
+  function text(str, x, y, size, color, flip) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (flip) ctx.rotate(Math.PI);
+    ctx.font = size + 'px "Russo One", Impact, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.fillText(str, 0, 0);
+    ctx.restore();
+  }
+
+  function render() {
+    const { s, ox, oy, dpr } = view;
+    let sx = 0, sy = 0;
+    if (S.shake > 0) { const k = S.shake * 18; sx = (Math.random() - .5) * k; sy = (Math.random() - .5) * k; }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = COL.ground; ctx.fillRect(0, 0, cvs.width, cvs.height);
+    ctx.drawImage(table, sx * dpr, sy * dpr);
+    ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (ox + sx), dpr * (oy + sy));
+
+    if (S.state !== 'menu') {
+      const flip = S.mode === '2p';
+      text(S.score[0], W - 62, H / 2 + 68, 70, 'rgba(229,72,63,.32)');
+      text(S.score[1], W - 62, H / 2 - 68, 70, 'rgba(47,116,224,.32)', flip);
+    }
+
+    if (S.puckOn) {
+      const t = S.trail;
+      for (let i = 0; i < t.length - 1; i++) {
+        if (t[i].sp < 350) continue;
+        ctx.fillStyle = `rgba(22,27,32,${(i + 1) / t.length * .12})`;
+        disk(t[i].x, t[i].y, PR * (.5 + .5 * (i + 1) / t.length));
+      }
+      drawPuck(S.puck);
+    }
+    drawMallet(S.m[0], COL.red, COL.redDeep);
+    drawMallet(S.m[1], COL.blue, COL.blueDeep);
+
+    if (S.goalT > 0 && S.state !== 'menu') {
+      const k = 1 - S.goalT / S.goalDur;
+      const pop = reduceMotion ? 1 : Math.min(1, k * 5) * (1 + .15 * Math.sin(Math.min(1, k * 5) * Math.PI));
+      const col = S.scorer === 0 ? COL.red : COL.blue;
+      const size = 118 * pop;
+      if (S.mode === '2p') {
+        text('ГОЛ!', W / 2, H * .75, size, col);
+        text('ГОЛ!', W / 2, H * .25, size, col, true);
+      } else text('ГОЛ!', W / 2, H / 2, size, col);
+    }
+  }
+
+  let last = 0;
+  function frame(t) {
+    const dt = Math.min(0.033, last ? (t - last) / 1000 : 0.016);
+    last = t;
+    if (S.state === 'play' || S.state === 'menu') step(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // ---- flow & UI ----
+  const ui = {
+    menu: $('menu'), pause: $('pause'), over: $('over'),
+    pauseBtn: $('pauseBtn'), muteBtn: $('muteBtn')
+  };
+  function show(name) {
+    ui.menu.hidden = name !== 'menu';
+    ui.pause.hidden = name !== 'paused';
+    ui.over.hidden = name !== 'over';
+    ui.pauseBtn.hidden = ui.muteBtn.hidden = name !== 'play';
+  }
+  function resetPositions() {
+    Object.assign(S.m[0], { x: W / 2, y: H - 120, tx: W / 2, ty: H - 120, vx: 0, vy: 0, maxV: 5000 });
+    Object.assign(S.m[1], { x: W / 2, y: 120, tx: W / 2, ty: 120, vx: 0, vy: 0, maxV: S.mode === '2p' ? 5000 : 800 });
+    S.goalT = 0; S.trail.length = 0; S.aimSet = [false, false];
+    serve(-1);
+  }
+  function startMatch() {
+    initAudio(); keepAwake();
+    S.score = [0, 0];
+    S.state = 'play';
+    pointers.clear();
+    resetPositions();
+    show('play');
+  }
+  function endMatch(winner) {
+    S.state = 'over';
+    const vsAI = S.mode === 'ai';
+    $('overEyebrow').textContent = vsAI ? ['Лёгкий', 'Нормальный', 'Жёсткий'][S.diff] + ' соперник' : 'Матч окончен';
+    $('overTitle').textContent = vsAI ? (winner === 0 ? 'Победа!' : 'Поражение') : (winner === 0 ? 'Красные победили' : 'Синие победили');
+    $('fR').textContent = S.score[0]; $('fB').textContent = S.score[1];
+    if (winner === 0 || !vsAI) { tone(523, .12, 'square', .1); tone(659, .12, 'square', .1, 0, .1); tone(784, .12, 'square', .1, 0, .2); tone(1047, .4, 'square', .12, 0, .3); }
+    show('over');
+  }
+  function pauseGame() {
+    if (S.state !== 'play') return;
+    S.state = 'paused';
+    $('pR').textContent = S.score[0]; $('pB').textContent = S.score[1];
+    show('paused');
+  }
+  function toMenu() {
+    S.state = 'menu';
+    resetPositions();
+    show('menu');
+  }
+
+  function syncMenu() {
+    document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode));
+    document.querySelectorAll('#diffSeg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.diff === S.diff));
+    $('diffGroup').hidden = S.mode !== 'ai';
+    $('hint').textContent = S.mode === 'ai'
+      ? 'Веди красную биту пальцем по нижней половине стола. Бей по шайбе с разгона — сила удара зависит от скорости биты.'
+      : 'Положите телефон на стол между собой. Каждый управляет битой на своей половине — можно одновременно.';
+    $('cross').toggleAttribute('hidden', !S.muted); $('waves').toggleAttribute('hidden', S.muted);
+    ui.muteBtn.setAttribute('aria-label', S.muted ? 'Включить звук' : 'Выключить звук');
+  }
+  $('modeSeg').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    S.mode = b.dataset.mode; savePrefs(); syncMenu();
+  });
+  $('diffSeg').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    S.diff = +b.dataset.diff; savePrefs(); syncMenu();
+  });
+  $('play').addEventListener('click', startMatch);
+  $('again').addEventListener('click', startMatch);
+  $('toMenu').addEventListener('click', toMenu);
+  $('quit').addEventListener('click', toMenu);
+  $('resume').addEventListener('click', () => { S.state = 'play'; pointers.clear(); last = 0; show('play'); });
+  ui.pauseBtn.addEventListener('click', pauseGame);
+  ui.muteBtn.addEventListener('click', () => { S.muted = !S.muted; savePrefs(); syncMenu(); initAudio(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseGame();
+    else if (S.state === 'play') keepAwake();
+  });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' || e.key === 'p') { if (S.state === 'play') pauseGame(); else if (S.state === 'paused') $('resume').click(); }
+  });
+
+  new ResizeObserver(resize).observe(app);
+  resize();
+  syncMenu();
+  show('menu');
+  serve(-1);
+  S.puck.vx = 260; S.puck.vy = -520;
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
