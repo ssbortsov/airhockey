@@ -1012,15 +1012,15 @@ function drawBall(c, x, y, r, rot) {
     const dx = r.b[0] - r.a[0], dy = r.b[1] - r.a[1], L = Math.hypot(dx, dy);
     r.dir = [dx / L, dy / L];
     r.n = dx > 0 ? [dy / L, -dx / L] : [-dy / L, dx / L];   // normal pointing up
-    // ball centre for step t (0..4 on the chute, 5 = in the gloves)
+    // ball centre at position t: 0 = top of the chute, 4 = its end, 5 = in the gloves
     r.at = t => {
-      const k = t <= 4 ? t / 4 : 1 + .9 / 4;
+      const k = t <= 4 ? t / 4 : 1 + (t - 4) * .9 / 4;
       return [r.a[0] + dx * k + r.n[0] * (BR + 7), r.a[1] + dy * k + r.n[1] * (BR + 7)];
     };
   });
   const BEEP = [523, 440, 659, 587];
 
-  const K = { state: 'off', score: 0, best: 0, misses: 0, pos: 0, balls: [], tickT: 0, freeze: 0, falls: [], catchT: 0, endT: 0, flash: 0 };
+  const K = { state: 'off', score: 0, best: 0, misses: 0, pos: 0, balls: [], spawnT: 0, lastRamp: 0, freeze: 0, falls: [], catchT: 0, endT: 0, flash: 0 };
   try { K.best = +localStorage.getItem('keeper-best') || 0; } catch (e) {}
 
   // ---- layout & background ----
@@ -1154,17 +1154,30 @@ function drawBall(c, x, y, r, rot) {
   }
 
   // ---- game logic ----
-  const interval = () => Math.max(0.24, 0.66 - K.score * 0.005);
-  function tick() {
+  // seconds a ball needs from the top of a chute to the gloves, and the pause between new balls
+  const travel = () => Math.max(1.0, 2.4 - K.score * 0.018);
+  const gap = () => Math.max(0.42, 1.2 - K.score * 0.012) * (.85 + Math.random() * .5);
+  function spawn() {
+    // sometimes several balls in a row roll down the same chute
+    const ramp = Math.random() < .3 ? K.lastRamp : Math.random() * 4 | 0;
+    K.lastRamp = ramp;
+    K.balls.push({ ramp, pos: 0, speed: 5 / travel(), rot: Math.random() * 6 });
+    A.tone(BEEP[ramp], .05, 'square', .05);
+  }
+  function roll(dt) {
     const done = [];
-    K.balls.forEach(b => { b.step++; b.rot += 1.3 * (b.ramp < 2 ? 1 : -1); if (b.step >= 5) done.push(b); });
-    K.balls = K.balls.filter(b => b.step < 5);
+    K.balls.forEach(b => {
+      const before = b.pos;
+      b.pos += b.speed * (.8 + b.pos * .08) * dt;          // picks up a little speed on the way down
+      b.rot += (b.pos - before) * 1.7 * (b.ramp < 2 ? 1 : -1);
+      if (before < 3.6 && b.pos >= 3.6) A.tone(BEEP[b.ramp] * 1.5, .04, 'square', .04);
+      if (b.pos >= 5) done.push(b);
+    });
+    K.balls = K.balls.filter(b => b.pos < 5);
     done.forEach(resolve);
-    const lead = K.balls.reduce((m, b) => (!m || b.step > m.step ? b : m), null);
-    if (lead && K.state === 'play') A.tone(BEEP[lead.ramp], .05, 'square', .05);
     if (K.state !== 'play' || K.freeze > 0) return;
-    const p = Math.min(.78, .4 + K.score * .007);
-    if (!K.balls.length || Math.random() < p) K.balls.push({ ramp: Math.random() * 4 | 0, step: 0, rot: Math.random() * 6 });
+    K.spawnT -= dt;
+    if (K.spawnT <= 0 || !K.balls.length && K.spawnT > .6) { spawn(); K.spawnT = gap(); }
   }
   function resolve(b) {
     if (b.ramp === K.pos) {
@@ -1179,7 +1192,7 @@ function drawBall(c, x, y, r, rot) {
       const [x, y] = RAMPS[b.ramp].at(5);
       K.falls.push({ x, y, vx: b.ramp < 2 ? 120 : -120, vy: -80, rot: b.rot, t: 0 });
       A.tone(220, .3, 'sawtooth', .09, .5); A.buzz(90);
-      K.freeze = 1;
+      K.freeze = .8;
       if (K.misses >= 3) { K.state = 'ending'; K.endT = 1.1; }
     }
   }
@@ -1198,8 +1211,7 @@ function drawBall(c, x, y, r, rot) {
     }
     if (K.state !== 'play') return;
     if (K.freeze > 0) { K.freeze -= dt; return; }
-    K.tickT -= dt;
-    if (K.tickT <= 0) { tick(); K.tickT += interval(); }
+    roll(dt);
   }
 
   // ---- drawing ----
@@ -1214,7 +1226,7 @@ function drawBall(c, x, y, r, rot) {
     ctx.drawImage(bg, 0, 0);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
 
-    K.balls.forEach(b => { const [x, y] = RAMPS[b.ramp].at(b.step); drawBall(ctx, x, y, BR, b.rot); });
+    K.balls.forEach(b => { const [x, y] = RAMPS[b.ramp].at(b.pos); drawBall(ctx, x, y, BR, b.rot); });
     drawKeeper();
     if (K.catchT > 0) { const [x, y] = RAMPS[K.pos].at(5); drawBall(ctx, x, y, BR * .9, 0); }
     K.falls.forEach(f => { ctx.globalAlpha = Math.min(1, (1.6 - f.t) * 2); drawBall(ctx, f.x, f.y, BR, f.rot); ctx.globalAlpha = 1; });
@@ -1260,7 +1272,7 @@ function drawBall(c, x, y, r, rot) {
     A.hud(name === 'play');
   }
   function reset() {
-    Object.assign(K, { score: 0, misses: 0, pos: 0, balls: [], tickT: .6, freeze: 0, falls: [], catchT: 0, flash: 0 });
+    Object.assign(K, { score: 0, misses: 0, pos: 0, balls: [], spawnT: .5, freeze: 0, falls: [], catchT: 0, flash: 0 });
   }
   function open() {
     root.hidden = false;
