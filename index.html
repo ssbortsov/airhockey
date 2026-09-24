@@ -141,13 +141,6 @@
     <div class="panel">
       <p class="eyebrow">Матч до 7 голов</p>
       <h1>Аэро<span>футбол</span></h1>
-      <div class="group">
-        <span class="label">Соперник</span>
-        <div class="seg" id="modeSeg">
-          <button type="button" id="mode-ai" data-mode="ai" aria-pressed="true">Компьютер</button>
-          <button type="button" id="mode-2p" data-mode="2p" aria-pressed="false">Вдвоём</button>
-        </div>
-      </div>
       <div class="group" id="diffGroup">
         <span class="label">Сложность</span>
         <div class="seg" id="diffSeg">
@@ -218,12 +211,11 @@
 
   try {
     const p = JSON.parse(localStorage.getItem('airhockey-prefs') || '{}');
-    if (p.mode === 'ai' || p.mode === '2p') S.mode = p.mode;
     if ([0, 1, 2].includes(p.diff)) S.diff = p.diff;
     if (typeof p.muted === 'boolean') S.muted = p.muted;
   } catch (e) {}
   function savePrefs() {
-    try { localStorage.setItem('airhockey-prefs', JSON.stringify({ mode: S.mode, diff: S.diff, muted: S.muted })); } catch (e) {}
+    try { localStorage.setItem('airhockey-prefs', JSON.stringify({ diff: S.diff, muted: S.muted })); } catch (e) {}
   }
 
   // ---- sound ----
@@ -813,19 +805,10 @@
   }
 
   function syncMenu() {
-    document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mode === S.mode));
     document.querySelectorAll('#diffSeg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.diff === S.diff));
-    $('diffGroup').hidden = S.mode !== 'ai';
-    $('hint').textContent = S.mode === 'ai'
-      ? 'Веди своего футболиста пальцем по нижней половине поля. Бей по мячу с разбега — сила удара зависит от скорости.'
-      : 'Положите телефон на стол между собой. Каждый управляет своим футболистом на своей половине — можно одновременно.';
     $('cross').toggleAttribute('hidden', !S.muted); $('waves').toggleAttribute('hidden', S.muted);
     ui.muteBtn.setAttribute('aria-label', S.muted ? 'Включить звук' : 'Выключить звук');
   }
-  $('modeSeg').addEventListener('click', e => {
-    const b = e.target.closest('button'); if (!b) return;
-    S.mode = b.dataset.mode; savePrefs(); syncMenu();
-  });
   $('diffSeg').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     S.diff = +b.dataset.diff; savePrefs(); syncMenu();
