@@ -42,15 +42,16 @@
   body { display: flex; flex-direction: column; }
   .topbar {
     flex: none;
-    display: grid; grid-template-columns: 42px 1fr 42px; align-items: center; gap: 12px;
+    display: grid; grid-template-columns: 42px 1fr 42px; grid-template-rows: 42px; align-items: center; gap: 12px;
     min-height: 58px; padding: 8px 16px;
     background: #0F1F16;
     border-bottom: 1px solid var(--line);
   }
+  .topbar > * { grid-row: 1; }
   .topbar .logo { grid-column: 2; justify-self: center; display: block; height: 32px; width: auto; max-width: 100%; }
   #app { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-  #c, #kc { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
-  #keeper { position: absolute; inset: 0; background: var(--ground); }
+  #c, #kc, #pc { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; display: block; }
+  #keeper, #penalty { position: absolute; inset: 0; background: var(--ground); }
   .games { display: flex; flex-direction: column; gap: 10px; }
   .game-card {
     appearance: none; cursor: pointer; text-align: left;
@@ -174,6 +175,11 @@
           <span><span class="t">Вратарь</span><span class="d">Мячи катятся по четырём желобам — лови каждый. Три пропуска — конец.</span></span>
           <span class="chev" aria-hidden="true">›</span>
         </button>
+        <button class="game-card" id="pickPenalty" type="button">
+          <span class="ic" style="background:#E81CE0"><svg viewBox="0 0 34 34"><path d="M4 22V8h26v14" fill="none" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/><path d="M8 11h18M8 15h18M8 19h18M12 8v14M17 8v14M22 8v14" stroke="#fff" stroke-width="1" opacity=".55"/><circle cx="17" cy="28" r="4" fill="#fff" stroke="#1B1D22" stroke-width="1.5"/></svg></span>
+          <span><span class="t">Пенальти</span><span class="d">Серия из 5 ударов. Выбери угол и силу — переиграй вратаря.</span></span>
+          <span class="chev" aria-hidden="true">›</span>
+        </button>
       </div>
     </div>
   </div>
@@ -223,6 +229,42 @@
       <div class="row">
         <button id="again" class="primary" type="button">Реванш</button>
         <button id="toMenu" class="secondary" type="button">Меню</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="penalty" hidden>
+    <canvas id="pc" aria-label="Пенальти: ворота и мяч"></canvas>
+    <div id="pStart" class="overlay">
+      <div class="panel">
+        <button class="back" id="pBack" type="button">‹ Все игры</button>
+        <p class="eyebrow" id="pBestLine">Рекорд: 0 из 5</p>
+        <h1>Пеналь<span>ти</span></h1>
+        <p class="hint">Коснись ворот, чтобы навести прицел. Зажми палец в нижней части экрана — шкала силы поползёт вверх и вниз. Отпусти, чтобы ударить. Слабый удар вратарь возьмёт, а слишком сильный улетит выше ворот.</p>
+        <ul class="keys">
+          <li><b>←↑→↓</b> — прицел</li>
+          <li><b>Пробел</b> — сила и удар</li>
+        </ul>
+        <button id="pPlay" class="primary" type="button">Бить</button>
+      </div>
+    </div>
+    <div id="pPause" class="overlay" hidden>
+      <div class="panel">
+        <p class="eyebrow">Пауза</p>
+        <div class="final"><span id="pPauseScore">0</span><span class="sep">из 5</span></div>
+        <button id="pResume" class="primary" type="button">Продолжить</button>
+        <button id="pQuit" class="secondary" type="button">Все игры</button>
+      </div>
+    </div>
+    <div id="pOver" class="overlay" hidden>
+      <div class="panel">
+        <p class="eyebrow" id="pOverEyebrow">Серия окончена</p>
+        <h2 id="pOverTitle">Отлично!</h2>
+        <div class="final"><span id="pFinal">0</span><span class="sep">из 5</span></div>
+        <div class="row">
+          <button id="pAgain" class="primary" type="button">Ещё серия</button>
+          <button id="pHome" class="secondary" type="button">Все игры</button>
+        </div>
       </div>
     </div>
   </div>
@@ -982,6 +1024,12 @@ function drawBall(c, x, y, r, rot) {
     show('away');
     window.Keeper.open();
   });
+  $('pickPenalty').addEventListener('click', () => {
+    initAudio();
+    S.state = 'away';
+    show('away');
+    window.Penalty.open();
+  });
   window.Arcade = {
     tone, initAudio, buzz, keepAwake, openHub,
     isMuted: () => S.muted,
@@ -1342,7 +1390,431 @@ function drawBall(c, x, y, r, rot) {
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
   new ResizeObserver(() => { dirty = true; }).observe(app);
 
-  window.Keeper = { open };
+  window.Keeper = { open, sprite };
+  requestAnimationFrame(frame);
+})();
+</script>
+<script>
+// ---- «Пенальти»: a five-kick shootout against a diving keeper ----
+(() => {
+  const A = window.Arcade;
+  const $ = id => document.getElementById(id);
+  const app = $('app'), root = $('penalty'), cvs = $('pc'), ctx = cvs.getContext('2d');
+  const PW = 600, PH = 900, MID = 300;
+  const GL = 90, GR = 510, GT = 330, GB = 470;          // goal mouth on screen
+  const SPOT = [MID, 745], BALL_R = 30, FAR_R = 11;
+  const KICKS = 5, CHARGE_Y = 540;
+  const SC = 6.5, SW = 14 * SC, SH = 22 * SC, KY0 = GB - SH / 2;  // keeper sprite
+  const kickerImg = new Image(); kickerImg.src = 'player-back.png';
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+  const lerp = (a, b, k) => a + (b - a) * k;
+
+  const P = {
+    state: 'off', results: [], best: 0,
+    aim: { x: 400, y: 380 }, power: 0, pdir: 1, charging: null,
+    ball: { x: SPOT[0], y: SPOT[1], r: BALL_R, rot: 0, a: 1 },
+    shot: null, post: null, runT: 0,
+    keeper: { x: MID, y: KY0, rot: 0, reach: 0, dive: null },
+    msg: '', msgCol: '#fff', msgT: 0
+  };
+  try { P.best = +localStorage.getItem('penalty-best') || 0; } catch (e) {}
+
+  // ---- layout & background ----
+  let view = { s: 1, ox: 0, oy: 0, dpr: 1 }, bg = null, dirty = true;
+  function resize() {
+    if (root.hidden) { dirty = true; return; }
+    const r = app.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    cvs.width = Math.max(1, Math.round(r.width * dpr));
+    cvs.height = Math.max(1, Math.round(r.height * dpr));
+    const s = Math.min(r.width / PW, r.height / PH);
+    view = { s, dpr, ox: (r.width - PW * s) / 2, oy: (r.height - PH * s) / 2, w: r.width, h: r.height };
+    buildBg(); dirty = false;
+  }
+  function rng(seed) {
+    return () => {
+      seed = seed + 0x6D2B79F5 | 0;
+      let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function buildBg() {
+    bg = document.createElement('canvas');
+    bg.width = cvs.width; bg.height = cvs.height;
+    const c = bg.getContext('2d');
+    const { s, ox, oy, dpr, w, h } = view;
+    c.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
+    const L = -ox / s, R = (w - ox) / s, T = -oy / s, B = (h - oy) / s;
+
+    // crowd behind the goal, pixel art
+    const PX = 5, rnd = rng(7);
+    c.fillStyle = '#1A222C'; c.fillRect(L, T, R - L, 215 - T);
+    const shirts = ['#E5483F', '#C9362F', '#2F74E0', '#1F5BBE', '#EEEEEA', '#F2C230', '#E81CE0'];
+    const hair = ['#2B1D14', '#5A3A22', '#C9A15A', '#8A4B2A', '#161616', '#9C9C9C'];
+    for (let y = Math.floor(T / PX) * PX, row = 0; y < 215 - PX * 5; y += PX * 5, row++) {
+      c.fillStyle = '#10161D'; c.fillRect(L, y + PX * 4, R - L, PX);
+      for (let x = Math.floor(L / PX) * PX + (row % 2) * PX * 2; x < R; x += PX * 4) {
+        if (rnd() < .08) continue;
+        c.fillStyle = hair[rnd() * hair.length | 0]; c.fillRect(x + PX, y, PX * 2, PX);
+        c.fillStyle = '#E8B894'; c.fillRect(x + PX, y + PX, PX * 2, PX);
+        c.fillStyle = shirts[rnd() * shirts.length | 0]; c.fillRect(x, y + PX * 2, PX * 4, PX * 2);
+      }
+    }
+    c.fillStyle = '#E81CE0'; c.fillRect(L, 215, R - L, 34);
+    c.font = '20px "Russo One", Impact, sans-serif'; c.textBaseline = 'middle'; c.textAlign = 'center'; c.fillStyle = '#fff';
+    for (let x = MID - 1200; x < R + 200; x += 220) if (x > L - 200) c.fillText('СУПЕРЛИГА', x, 232);
+
+    // grass with stripes that widen toward the camera
+    c.fillStyle = '#3C9447'; c.fillRect(L, 249, R - L, B - 249);
+    c.fillStyle = '#44A350';
+    for (let y = 249, hgt = 22, i = 0; y < B; y += hgt, hgt *= 1.22, i++) if (i % 2) c.fillRect(L, y, R - L, hgt);
+
+    // lines in perspective
+    c.strokeStyle = 'rgba(255,255,255,.9)'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(L, GB); c.lineTo(R, GB); c.stroke();
+    c.beginPath(); c.moveTo(20, GB); c.lineTo(-10, 545); c.lineTo(610, 545); c.lineTo(580, GB); c.stroke();
+    c.beginPath(); c.moveTo(-160, 690); c.lineTo(760, 690); c.stroke();
+    c.beginPath(); c.ellipse(MID, 690, 150, 60, 0, 0, Math.PI); c.stroke();
+    c.fillStyle = '#fff'; c.beginPath(); c.ellipse(SPOT[0], SPOT[1] + BALL_R - 4, 12, 5, 0, 0, Math.PI * 2); c.fill();
+
+    // goal: net box, then frame
+    c.fillStyle = 'rgba(10,30,15,.3)'; c.fillRect(GL, GT, GR - GL, GB - GT);
+    c.strokeStyle = 'rgba(255,255,255,.3)'; c.lineWidth = 1.2; c.beginPath();
+    for (let x = GL + 12; x < GR; x += 14) { c.moveTo(x, GT); c.lineTo(x + (x - MID) * -.06, GB - 26); }
+    for (let y = GT + 12; y < GB - 20; y += 13) { c.moveTo(GL + 18, y); c.lineTo(GR - 18, y); }
+    c.moveTo(GL, GB); c.lineTo(GL + 26, GB - 26); c.lineTo(GR - 26, GB - 26); c.lineTo(GR, GB);
+    c.stroke();
+    c.fillStyle = '#F4F4F0';
+    c.fillRect(GL - 8, GT - 8, 8, GB - GT + 8); c.fillRect(GR, GT - 8, 8, GB - GT + 8); c.fillRect(GL - 8, GT - 8, GR - GL + 16, 8);
+  }
+
+  // ---- characters ----
+  function drawKeeper() {
+    const k = P.keeper, sprite = window.Keeper.sprite;
+    ctx.fillStyle = 'rgba(0,20,10,.25)';
+    ctx.beginPath(); ctx.ellipse(k.x, GB + 2, 40, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(k.x, k.y); ctx.rotate(k.rot);
+    // arms: ready at the sides, stretched above the head in a dive
+    const e = k.reach, sy = -SH / 2 + 11.5 * SC;
+    [-1, 1].forEach(side => {
+      const sx = side * (SW / 2 - 1.5 * SC);
+      const hx = lerp(side * (SW / 2 + 10), side * 22, e), hy = lerp(sy + 30, -SH / 2 - 30, e);
+      ctx.lineCap = 'square';
+      ctx.strokeStyle = '#14161A'; ctx.lineWidth = 13;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(hx, hy); ctx.stroke();
+      ctx.strokeStyle = '#F2C230'; ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(hx, hy); ctx.stroke();
+      ctx.fillStyle = '#14161A'; ctx.fillRect(hx - 10, hy - 10, 20, 20);
+      ctx.fillStyle = '#F4F4F0'; ctx.fillRect(hx - 7, hy - 7, 14, 14);
+    });
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(sprite, -SW / 2, -SH / 2, SW, SH);
+    ctx.imageSmoothingEnabled = true;
+    ctx.restore();
+  }
+  function kickerPos() {
+    const k = P.state === 'run' ? Math.min(1, P.runT / .32) : P.state === 'aim' || P.state === 'ready' ? 0 : 1;
+    return { x: lerp(205, 262, k), y: lerp(905, 858, k) };
+  }
+  function drawKicker() {
+    if (!kickerImg.complete || !kickerImg.naturalWidth) return;
+    const { x, y } = kickerPos(), h = 230, w = h * kickerImg.naturalWidth / kickerImg.naturalHeight;
+    ctx.fillStyle = 'rgba(0,20,10,.28)';
+    ctx.beginPath(); ctx.ellipse(x, y - 4, w * .42, 10, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.drawImage(kickerImg, x - w / 2, y - h, w, h);
+  }
+
+  // ---- shooting ----
+  function newKick() {
+    Object.assign(P.ball, { x: SPOT[0], y: SPOT[1], r: BALL_R, rot: 0, a: 1 });
+    Object.assign(P.keeper, { x: MID, y: KY0, rot: 0, reach: 0, dive: null });
+    P.shot = null; P.post = null; P.power = 0; P.pdir = 1; P.charging = null; P.runT = 0;
+    P.state = 'aim';
+  }
+  function release() {
+    if (P.state !== 'aim' || P.charging === null) return;
+    P.charging = null;
+    if (P.power < .05) return;
+    P.state = 'run'; P.runT = 0;
+  }
+  function launch() {
+    const pw = P.power, n = P.results.length;
+    // accuracy drops with power; overhit balls rise over the bar
+    const spread = 8 + pw * pw * 34;
+    const tx = P.aim.x + (Math.random() - .5) * 2 * spread;
+    const ty = P.aim.y + (Math.random() - .5) * 2 * spread - Math.max(0, pw - .82) * 650;
+    P.shot = { x0: SPOT[0], y0: SPOT[1], tx, ty, T: 1.05 - .6 * pw, t: 0, arc: 30 + (1 - pw) * 70 };
+    // keeper reads the shot better with every kick
+    const guess = Math.random() < .3 + n * .1;
+    const stay = Math.random() < .15;
+    let dx = guess ? tx + (Math.random() - .5) * 60 : 2 * MID - tx + (Math.random() - .5) * 80;
+    let dy = guess ? ty + (Math.random() - .5) * 40 : lerp(GT + 40, GB - 30, Math.random());
+    if (stay) { dx = MID; dy = KY0; }
+    dx = clamp(dx, GL + 20, GR - 20); dy = clamp(dy, GT + 30, GB - 24);   // low dives go down to the grass
+    P.keeper.dive = { dx, dy, delay: .12 + Math.random() * .12, dur: .5 };
+    A.tone(140, .12, 'triangle', .2, .6);
+    P.state = 'flight';
+  }
+  function segDist(px, py, ax, ay, bx, by) {
+    const vx = bx - ax, vy = by - ay, t = clamp(((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy), 0, 1);
+    return Math.hypot(px - ax - vx * t, py - ay - vy * t);
+  }
+  function resolve() {
+    const { tx, ty } = P.shot, k = P.keeper;
+    const inside = tx > GL + 4 && tx < GR - 4 && ty > GT + 4 && ty < GB;
+    const nearFrame = (Math.abs(tx - GL) < 14 || Math.abs(tx - GR) < 14) && ty > GT - 14 && ty < GB
+      || Math.abs(ty - GT) < 14 && tx > GL - 14 && tx < GR + 14;
+    const ux = Math.sin(k.rot), uy = -Math.cos(k.rot);
+    const top = SH / 2 + 30 * k.reach;
+    const saved = segDist(tx, ty, k.x - ux * SH / 2, k.y - uy * SH / 2, k.x + ux * top, k.y + uy * top) < FAR_R + 30;
+    let res;
+    if (nearFrame && !inside) res = 'post';
+    else if (!inside) res = 'miss';
+    else if (saved) res = 'save';
+    else res = 'goal';
+    const b = P.ball;
+    if (res === 'goal') {
+      P.post = { vx: (tx - MID) * .08, vy: 30, vr: -4, g: 500, floor: GB - 30 };
+      P.msg = 'ГОЛ!'; P.msgCol = '#FFD65A';
+      [523, 659, 784].forEach((f, i) => A.tone(f, .14, 'square', .09, 0, i * .1)); A.buzz([30, 40, 60]);
+    } else if (res === 'save') {
+      P.post = { vx: (tx - k.x) * 3 + (Math.random() - .5) * 200, vy: 260, vr: 18, g: 600, floor: 900 };
+      P.msg = 'СЕЙВ!'; P.msgCol = '#8DC8FF';
+      A.tone(300, .12, 'square', .1, .6); A.buzz(80);
+    } else if (res === 'post') {
+      P.post = { vx: (tx < MID ? 1 : -1) * 150, vy: 200, vr: 8, g: 600, floor: 900 };
+      P.msg = 'ШТАНГА!'; P.msgCol = '#fff';
+      A.tone(1400, .25, 'triangle', .12, .9); A.buzz(60);
+    } else {
+      P.post = { vx: (tx - MID) * .9, vy: -220, vr: -6, g: 0, floor: 900, fade: true };
+      P.msg = 'МИМО!'; P.msgCol = '#fff';
+      A.tone(200, .3, 'sawtooth', .08, .6);
+    }
+    P.results.push(res === 'goal' ? 1 : 0);
+    P.state = 'result'; P.msgT = 1.7;
+    b.x = tx; b.y = ty;
+  }
+
+  function update(dt) {
+    if (P.state === 'aim' && P.charging !== null) {
+      P.power += P.pdir * dt / 1.05;
+      if (P.power >= 1) { P.power = 1; P.pdir = -1; }
+      if (P.power <= 0) { P.power = 0; P.pdir = 1; }
+    }
+    if (P.state === 'run') {
+      P.runT += dt;
+      if (P.runT >= .32) launch();
+    }
+    if (P.state === 'flight') {
+      const sh = P.shot, b = P.ball, k = P.keeper, d = k.dive;
+      sh.t += dt;
+      const e = Math.min(1, sh.t / sh.T);
+      b.x = lerp(sh.x0, sh.tx, e);
+      b.y = lerp(sh.y0, sh.ty, e) - sh.arc * Math.sin(Math.PI * e);
+      b.r = lerp(BALL_R, FAR_R, Math.pow(e, .7));
+      b.rot += dt * 14;
+      if (sh.t > d.delay) {
+        const q = Math.min(1, (sh.t - d.delay) / d.dur), ease = 1 - (1 - q) * (1 - q);
+        k.x = lerp(MID, d.dx, ease); k.y = lerp(KY0, d.dy, ease);
+        k.rot = lerp(0, clamp((d.dx - MID) / 150, -1.35, 1.35), ease);
+        k.reach = ease;
+      }
+      if (e >= 1) resolve();
+    }
+    if (P.state === 'result') {
+      const b = P.ball, p = P.post;
+      b.x += p.vx * dt; b.y += p.vy * dt; p.vy += p.g * dt; b.rot += p.vr * dt;
+      if (b.y > p.floor) { b.y = p.floor; p.vy *= -.3; p.vx *= .6; }
+      if (p.fade) b.a = Math.max(0, b.a - dt * 1.4);
+      P.msgT -= dt;
+      if (P.msgT <= 0) {
+        if (P.results.length >= KICKS) finish(); else newKick();
+      }
+    }
+  }
+
+  // ---- drawing ----
+  function label(str, x, y, size, color, align) {
+    ctx.font = size + 'px "Russo One", Impact, sans-serif';
+    ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = color; ctx.fillText(str, x, y);
+  }
+  function render() {
+    const { s, ox, oy, dpr } = view;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(bg, 0, 0);
+    ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
+    const b = P.ball;
+    // a scored ball sits in the net behind the keeper; otherwise it is in front of him
+    const inNet = P.state === 'result' && P.results[P.results.length - 1] === 1;
+    const ball = () => { ctx.globalAlpha = b.a; drawBall(ctx, b.x, b.y, b.r, b.rot); ctx.globalAlpha = 1; };
+    if (inNet) ball();
+    drawKeeper();
+    if (!inNet) ball();
+
+    if (P.state === 'aim' || P.state === 'run') {
+      // dotted flight path and crosshair
+      ctx.fillStyle = 'rgba(255,255,255,.75)';
+      for (let i = 1; i < 12; i++) {
+        const e = i / 12, arc = 30 + (1 - Math.max(P.power, .5)) * 70;
+        const x = lerp(SPOT[0], P.aim.x, e), y = lerp(SPOT[1], P.aim.y, e) - arc * Math.sin(Math.PI * e);
+        ctx.beginPath(); ctx.arc(x, y, lerp(4, 2, e), 0, Math.PI * 2); ctx.fill();
+      }
+      const { x, y } = P.aim;
+      ctx.strokeStyle = '#FFD65A'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 28, y); ctx.lineTo(x - 10, y); ctx.moveTo(x + 10, y); ctx.lineTo(x + 28, y);
+      ctx.moveTo(x, y - 28); ctx.lineTo(x, y - 10); ctx.moveTo(x, y + 10); ctx.lineTo(x, y + 28); ctx.stroke();
+    }
+    drawKicker();
+
+    // power meter
+    if (P.state === 'aim' || P.state === 'run') {
+      const x = 548, y0 = 580, hgt = 250, w = 26;
+      ctx.fillStyle = 'rgba(8,12,16,.75)'; ctx.fillRect(x - 4, y0 - 4, w + 8, hgt + 8);
+      ctx.fillStyle = 'rgba(54,194,107,.28)'; ctx.fillRect(x, y0 + hgt * (1 - .82), w, hgt * (.82 - .55));
+      const gr = ctx.createLinearGradient(0, y0 + hgt, 0, y0);
+      gr.addColorStop(0, '#36C26B'); gr.addColorStop(.7, '#FFD65A'); gr.addColorStop(1, '#E5483F');
+      ctx.fillStyle = gr; ctx.fillRect(x, y0 + hgt * (1 - P.power), w, hgt * P.power);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(x, y0, w, hgt);
+      label('СИЛА', x + w / 2, y0 - 20, 15, '#fff');
+      if (P.state === 'aim' && P.charging === null && P.power === 0)
+        label('Зажми внизу — сила, отпусти — удар', MID, 870, 17, 'rgba(255,255,255,.9)');
+    }
+
+    // series scoreboard
+    ctx.fillStyle = 'rgba(8,12,16,.88)';
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(150, 18, 300, 78, 14) : ctx.rect(150, 18, 300, 78); ctx.fill();
+    label('УДАР ' + Math.min(P.results.length + 1, KICKS) + ' ИЗ ' + KICKS, MID, 38, 15, '#8DA2B4');
+    for (let i = 0; i < KICKS; i++) {
+      const x = MID - 100 + i * 50, y = 70, r = P.results[i];
+      ctx.lineWidth = 3;
+      if (r === undefined) { ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.stroke(); }
+      else { ctx.fillStyle = r ? '#36C26B' : '#E5483F'; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill(); }
+    }
+    label('РЕКОРД', 70, 38, 14, 'rgba(255,255,255,.75)');
+    label(P.best + '/5', 70, 70, 26, '#fff');
+
+    if (P.state === 'result') {
+      const k = 1 - P.msgT / 1.7, pop = Math.min(1, k * 6);
+      ctx.save(); ctx.translate(MID, 600); ctx.scale(pop, pop);
+      ctx.fillStyle = 'rgba(8,12,16,.45)'; ctx.fillRect(-190, -48, 380, 96);
+      label(P.msg, 0, 0, 72, P.msgCol);
+      ctx.restore();
+    }
+  }
+
+  let last = 0;
+  function frame(t) {
+    const dt = Math.min(0.05, last ? (t - last) / 1000 : 0.016);
+    last = t;
+    if (P.state !== 'off') {
+      if (dirty) resize();
+      if (P.state !== 'paused' && P.state !== 'ready' && P.state !== 'over') update(dt);
+      render();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---- flow ----
+  const ui = { start: $('pStart'), pause: $('pPause'), over: $('pOver') };
+  const playing = () => ['aim', 'run', 'flight', 'result'].includes(P.state);
+  function show(name) {
+    ui.start.hidden = name !== 'ready';
+    ui.pause.hidden = name !== 'paused';
+    ui.over.hidden = name !== 'over';
+    A.hud(name === 'play');
+  }
+  function open() {
+    root.hidden = false;
+    P.results = [];
+    newKick();
+    P.state = 'ready';
+    $('pBestLine').textContent = 'Рекорд: ' + P.best + ' из 5';
+    dirty = true;
+    show('ready');
+  }
+  function start() {
+    A.initAudio(); A.keepAwake();
+    P.results = [];
+    newKick();
+    last = 0;
+    show('play');
+  }
+  function finish() {
+    const goals = P.results.reduce((a, b) => a + b, 0);
+    const record = goals > P.best;
+    if (record) { P.best = goals; try { localStorage.setItem('penalty-best', goals); } catch (e) {} }
+    P.state = 'over';
+    $('pFinal').textContent = goals;
+    $('pOverEyebrow').textContent = record ? 'Новый рекорд!' : 'Рекорд: ' + P.best + ' из 5';
+    $('pOverTitle').textContent = goals === 5 ? 'Идеальная серия!' : goals >= 4 ? 'Отлично!' : goals >= 3 ? 'Неплохо' : goals >= 1 ? 'Вратарь в ударе' : 'Сухой ноль';
+    if (goals >= 4) [523, 659, 784, 1047].forEach((f, i) => A.tone(f, .14, 'square', .09, 0, i * .1));
+    show('over');
+  }
+  let resumeTo = 'aim';
+  function pause() {
+    if (!playing()) return;
+    resumeTo = P.state; P.charging = null;
+    P.state = 'paused';
+    $('pPauseScore').textContent = P.results.reduce((a, b) => a + b, 0);
+    show('paused');
+  }
+  function home() {
+    P.state = 'off';
+    root.hidden = true;
+    show('off');
+    A.openHub();
+  }
+
+  function toLogical(e) {
+    const r = cvs.getBoundingClientRect();
+    return { x: (e.clientX - r.left - view.ox) / view.s, y: (e.clientY - r.top - view.oy) / view.s };
+  }
+  const aimAt = p => { P.aim.x = clamp(p.x, GL - 50, GR + 50); P.aim.y = clamp(p.y, GT - 60, GB - 10); };
+  let aimId = null;
+  cvs.addEventListener('pointerdown', e => {
+    if (P.state !== 'aim') return;
+    e.preventDefault();
+    const p = toLogical(e);
+    try { cvs.setPointerCapture(e.pointerId); } catch (err) {}
+    if (p.y < CHARGE_Y) { aimId = e.pointerId; aimAt(p); }
+    else if (P.charging === null) { P.charging = e.pointerId; P.power = 0; P.pdir = 1; }
+  });
+  cvs.addEventListener('pointermove', e => { if (e.pointerId === aimId && P.state === 'aim') aimAt(toLogical(e)); });
+  const up = e => {
+    if (e.pointerId === aimId) aimId = null;
+    if (e.pointerId === P.charging) release();
+  };
+  cvs.addEventListener('pointerup', up);
+  cvs.addEventListener('pointercancel', e => { if (e.pointerId === P.charging) P.charging = null; if (e.pointerId === aimId) aimId = null; });
+  document.addEventListener('touchmove', e => { if (playing()) e.preventDefault(); }, { passive: false });
+  window.addEventListener('keydown', e => {
+    if (P.state === 'aim') {
+      const step = 12;
+      if (e.key === 'ArrowLeft') aimAt({ x: P.aim.x - step, y: P.aim.y });
+      else if (e.key === 'ArrowRight') aimAt({ x: P.aim.x + step, y: P.aim.y });
+      else if (e.key === 'ArrowUp') aimAt({ x: P.aim.x, y: P.aim.y - step });
+      else if (e.key === 'ArrowDown') aimAt({ x: P.aim.x, y: P.aim.y + step });
+      else if (e.key === ' ' && P.charging === null && !e.repeat) { P.charging = 'key'; P.power = 0; P.pdir = 1; }
+      if (e.key.startsWith('Arrow') || e.key === ' ') e.preventDefault();
+    }
+    if (e.key === 'Escape') { if (playing()) pause(); else if (P.state === 'paused') $('pResume').click(); }
+  });
+  window.addEventListener('keyup', e => { if (e.key === ' ' && P.charging === 'key') release(); });
+  $('pPlay').addEventListener('click', start);
+  $('pAgain').addEventListener('click', start);
+  $('pBack').addEventListener('click', home);
+  $('pHome').addEventListener('click', home);
+  $('pQuit').addEventListener('click', home);
+  $('pResume').addEventListener('click', () => { P.state = resumeTo; last = 0; show('play'); });
+  $('pauseBtn').addEventListener('click', pause);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+  new ResizeObserver(() => { dirty = true; }).observe(app);
+
+  window.Penalty = { open };
   requestAnimationFrame(frame);
 })();
 </script>
