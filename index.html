@@ -13,6 +13,7 @@
   [hidden] { display: none !important; }
 </style>
 <title>Аркада Суперлиги</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23E81CE0'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Onest:wght@400;600&display=swap">
@@ -68,7 +69,8 @@
   .game-card .chev { color: var(--muted); font-size: 20px; }
   .back {
     appearance: none; border: 0; background: none; color: var(--muted); cursor: pointer;
-    font: 600 14px/1 "Onest", system-ui, sans-serif; padding: 4px 0; align-self: flex-start;
+    font: 600 14px/1 "Onest", system-ui, sans-serif; align-self: flex-start;
+    min-height: 40px; padding: 0 12px 0 0; margin: -10px 0 -8px;
   }
   .keys { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .keys li { background: rgba(255, 255, 255, .05); border-radius: 10px; padding: 8px 10px; font-size: 13px; color: var(--muted); }
@@ -76,13 +78,13 @@
 
   .overlay {
     position: absolute; inset: 0;
-    display: grid; place-items: center;
+    display: flex; overflow-y: auto; overscroll-behavior: contain;
     padding: 16px;
     background: rgba(9, 15, 22, .5);
     -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
   }
   .panel {
-    width: min(360px, 100%);
+    width: min(360px, 100%); min-width: 0; margin: auto;   /* auto margins centre it and still let a tall panel scroll */
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 22px;
@@ -98,13 +100,13 @@
     margin: 0; font-family: "Russo One", Impact, "Arial Black", sans-serif; font-weight: 400;
     text-wrap: balance; line-height: .95;
   }
-  h1 { font-size: clamp(42px, 13vw, 58px); letter-spacing: -.01em; }
+  h1 { font-size: clamp(34px, 11vw, 56px); letter-spacing: -.01em; }
   h1 span { color: var(--red); }
   h2 { font-size: 40px; }
   .group { display: flex; flex-direction: column; gap: 8px; }
   .label { font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .seg {
-    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px;
     padding: 4px; border-radius: 13px; background: rgba(255, 255, 255, .06);
   }
   .seg button {
@@ -442,72 +444,106 @@ function drawBall(c, x, y, r, rot) {
     hair: ['#2B1D14', '#5A3A22', '#C9A15A', '#8A4B2A', '#161616', '#9C9C9C', '#E8B894'],
     skin: '#E8B894', floor: '#56616D', seat: '#3B4757', back: '#262E38', pants: '#2B323C'
   };
+  // paints one stand: `len` seats along the pitch, `depth` art pixels away from it.
+  // put(layer, k, a, colour): k = distance from the pitch, a = position along it
+  function paintStand(put, len, depth, teamAt, aisleAt, seed) {
+    const rnd = rng(seed);
+    const pick = a => a[rnd() * a.length | 0];
+    for (let a = 0; a < len; a++) { put(0, 0, a, '#6E7985'); put(0, 1, a, '#4B5663'); }
+    let banner = 0, bannerTeam = 0;
+    for (let ca = 0; ca * 3 < len; ca++) {
+      const pa = ca * 3, team = teamAt(pa + 1.5), aisle = aisleAt(ca, pa + 1.5);
+      if (!aisle && banner === 0 && rnd() < .02) { banner = 6 + (rnd() * 4 | 0); bannerTeam = team; }
+      for (let k = 2; k < depth; k += 4) {
+        const ck = (k - 2) / 4;
+        if (aisle) {
+          for (let dk = 0; dk < 4; dk++) for (let da = 0; da < 3; da++) put(0, k + dk, pa + da, dk % 2 ? '#5C6773' : '#67727E');
+          continue;
+        }
+        if (banner > 0 && ck < 2) {         // flag draped over the front rows
+          const main = FANS.shirts[bannerTeam][0];
+          for (let dk = 0; dk < 4; dk++) for (let da = 0; da < 3; da++) put(0, k + dk, pa + da, (ck === 0 && dk === 3) || (ck === 1 && dk === 0) ? '#F4F4F0' : main);
+          continue;
+        }
+        for (let da = 0; da < 3; da++) put(0, k + 3, pa + da, FANS.back);
+        if (rnd() < .07) {                  // empty seat
+          for (let da = 0; da < 3; da++) { put(0, k, pa + da, FANS.floor); put(0, k + 1, pa + da, FANS.seat); put(0, k + 2, pa + da, FANS.seat); }
+          continue;
+        }
+        const shirt = rnd() < .15 ? '#EEEEEA' : pick(FANS.shirts[team]);
+        const hair = pick(FANS.hair);
+        put(0, k, pa, FANS.floor); put(0, k, pa + 1, FANS.pants); put(0, k, pa + 2, FANS.floor);
+        for (const dk of [1, 2]) { put(0, k + dk, pa, shirt); put(0, k + dk, pa + 1, hair); put(0, k + dk, pa + 2, shirt); }
+        // cheering pose: hands up, some wave scarves
+        if (rnd() < .85) {
+          if (rnd() < .3) for (let da = 0; da < 3; da++) put(1 + team, k, pa + da, da === 1 ? '#F4F4F0' : FANS.shirts[team][0]);
+          else { put(1 + team, k, pa, FANS.skin); put(1 + team, k, pa + 2, FANS.skin); }
+        }
+      }
+      if (banner > 0) banner--;
+    }
+  }
+  function layerSet(w, h) {
+    const layers = [0, 1, 2].map(() => { const k = document.createElement('canvas'); k.width = Math.max(1, w); k.height = Math.max(1, h); return k; });
+    return { layers, g: layers.map(k => k.getContext('2d')) };
+  }
   function buildStands() {
     stands = null;
     const { s, ox, oy, dpr } = view;
-    const cols = Math.floor((ox / s - RAIL - 4) / PX);
-    if (cols < 6) return;
+    const cols = Math.floor((ox / s - RAIL - 4) / PX);                 // side stands depth
+    const ends = Math.floor((oy / s - RAIL - 4) / PX);                 // stands behind the goals
     const y0 = Math.floor(-oy / s / PX);
     const rows = Math.ceil((cvs.height / dpr - oy) / s / PX) - y0;
-    const layers = [0, 1, 2].map(() => { const k = document.createElement('canvas'); k.width = cols * 2; k.height = rows; return k; });
-    const g = layers.map(k => k.getContext('2d'));
-    // k = distance from the pitch in art pixels; left stand is mirrored
-    const put = (li, side, k, y, col) => {
-      if (k >= cols || y >= rows) return;
-      g[li].fillStyle = col;
-      g[li].fillRect(side ? cols + k : cols - 1 - k, y, 1, 1);
+    const x0 = Math.floor(-ox / s / PX);
+    const span = Math.ceil((cvs.width / dpr - ox) / s / PX) - x0;
+    const out = { cols, rows, y0, ends, x0, span, side: null, end: null };
+    const shade = (g, x, y, w, h, x1, y1, x2, y2) => {
+      const gr = g.createLinearGradient(x1, y1, x2, y2);
+      gr.addColorStop(0, 'rgba(8,14,20,0)'); gr.addColorStop(1, 'rgba(8,14,20,.3)');
+      g.fillStyle = gr; g.fillRect(x, y, w, h);
     };
-    for (let side = 0; side < 2; side++) {
-      const rnd = rng(11 + side * 977);
-      const pick = a => a[rnd() * a.length | 0];
-      for (let y = 0; y < rows; y++) { put(0, side, 0, y, '#6E7985'); put(0, side, 1, y, '#4B5663'); }
-      let banner = 0, bannerTeam = 0;
-      for (let cy = 0; cy * 3 < rows; cy++) {
-        const py = cy * 3, ly = (y0 + py + 1.5) * PX;
-        const team = ly < H / 2 ? 1 : 0;
-        const aisle = Math.abs(ly - H / 2) < PX * 2.5 || (cy + 5) % 17 === 0;
-        if (!aisle && banner === 0 && rnd() < .02) { banner = 6 + (rnd() * 4 | 0); bannerTeam = team; }
-        for (let k = 2; k < cols; k += 4) {
-          const cx = (k - 2) / 4;
-          if (aisle) {
-            for (let dx = 0; dx < 4; dx++) for (let dy = 0; dy < 3; dy++) put(0, side, k + dx, py + dy, dx % 2 ? '#5C6773' : '#67727E');
-            continue;
-          }
-          if (banner > 0 && cx < 2) {       // flag draped over the front rows
-            const main = FANS.shirts[bannerTeam][0];
-            for (let dx = 0; dx < 4; dx++) for (let dy = 0; dy < 3; dy++) put(0, side, k + dx, py + dy, (cx === 0 && dx === 3) || (cx === 1 && dx === 0) ? '#F4F4F0' : main);
-            continue;
-          }
-          for (let dy = 0; dy < 3; dy++) put(0, side, k + 3, py + dy, FANS.back);
-          if (rnd() < .07) {                // empty seat
-            for (let dy = 0; dy < 3; dy++) { put(0, side, k, py + dy, FANS.floor); put(0, side, k + 1, py + dy, FANS.seat); put(0, side, k + 2, py + dy, FANS.seat); }
-            continue;
-          }
-          const shirt = rnd() < .15 ? '#EEEEEA' : pick(FANS.shirts[team]);
-          const hair = pick(FANS.hair);
-          put(0, side, k, py, FANS.floor); put(0, side, k, py + 1, FANS.pants); put(0, side, k, py + 2, FANS.floor);
-          for (const dx of [1, 2]) { put(0, side, k + dx, py, shirt); put(0, side, k + dx, py + 1, hair); put(0, side, k + dx, py + 2, shirt); }
-          // cheering pose: hands up, some wave scarves
-          if (rnd() < .85) {
-            if (rnd() < .3) for (let dy = 0; dy < 3; dy++) put(1 + team, side, k, py + dy, dy === 1 ? '#F4F4F0' : FANS.shirts[team][0]);
-            else { put(1 + team, side, k, py, FANS.skin); put(1 + team, side, k, py + 2, FANS.skin); }
-          }
-        }
-        if (banner > 0) banner--;
+    if (cols >= 6) {
+      const L = layerSet(cols * 2, rows);
+      for (let side = 0; side < 2; side++) {
+        paintStand((li, k, a, col) => {
+          if (k >= cols || a >= rows) return;
+          L.g[li].fillStyle = col; L.g[li].fillRect(side ? cols + k : cols - 1 - k, a, 1, 1);
+        }, rows, cols,
+        a => (y0 + a) * PX < H / 2 ? 1 : 0,
+        (ca, a) => Math.abs((y0 + a) * PX - H / 2) < PX * 2.5 || (ca + 5) % 17 === 0,
+        11 + side * 977);
+        shade(L.g[0], side ? cols : 0, 0, cols, rows, cols, 0, side ? cols * 2 : 0, 0);
       }
-      // rows further from the pitch sit higher and read a touch darker
-      const gx = g[0].createLinearGradient(side ? cols : cols, 0, side ? cols * 2 : 0, 0);
-      gx.addColorStop(0, 'rgba(8,14,20,0)'); gx.addColorStop(1, 'rgba(8,14,20,.3)');
-      g[0].fillStyle = gx; g[0].fillRect(side ? cols : 0, 0, cols, rows);
+      out.side = L.layers;
     }
-    stands = { layers, cols, rows, y0 };
+    if (ends >= 6) {
+      const L = layerSet(span, ends * 2);
+      for (let end = 0; end < 2; end++) {             // 0 = behind the top (blue) goal, 1 = bottom (red)
+        paintStand((li, k, a, col) => {
+          if (k >= ends || a >= span) return;
+          L.g[li].fillStyle = col; L.g[li].fillRect(a, end ? ends + k : ends - 1 - k, 1, 1);
+        }, span, ends,
+        () => end ? 0 : 1,
+        (ca, a) => (ca + 3) % 15 === 0,
+        501 + end * 313);
+        shade(L.g[0], 0, end ? ends : 0, span, ends, 0, ends, 0, end ? ends * 2 : 0);
+      }
+      out.end = L.layers;
+    }
+    if (out.side || out.end) stands = out;
   }
-  function drawStands(c, layer) {
-    const { cols, rows, y0 } = stands;
+  function drawStands(c, li) {
+    const { cols, rows, y0, ends, x0, span, side, end } = stands;
     const smooth = c.imageSmoothingEnabled;
     c.imageSmoothingEnabled = false;
-    c.drawImage(layer, 0, 0, cols, rows, -RAIL - 4 - cols * PX, y0 * PX, cols * PX, rows * PX);
-    c.drawImage(layer, cols, 0, cols, rows, W + RAIL + 4, y0 * PX, cols * PX, rows * PX);
+    if (end) {
+      c.drawImage(end[li], 0, 0, span, ends, x0 * PX, -RAIL - 4 - ends * PX, span * PX, ends * PX);
+      c.drawImage(end[li], 0, ends, span, ends, x0 * PX, H + RAIL + 4, span * PX, ends * PX);
+    }
+    if (side) {
+      c.drawImage(side[li], 0, 0, cols, rows, -RAIL - 4 - cols * PX, y0 * PX, cols * PX, rows * PX);
+      c.drawImage(side[li], cols, 0, cols, rows, W + RAIL + 4, y0 * PX, cols * PX, rows * PX);
+    }
     c.imageSmoothingEnabled = smooth;
   }
   function resize() {
@@ -539,7 +575,7 @@ function drawBall(c, x, y, r, rot) {
     c.setTransform(dpr * s, 0, 0, dpr * s, dpr * ox, dpr * oy);
 
     buildStands();
-    if (stands) drawStands(c, stands.layers[0]);
+    if (stands) drawStands(c, 0);
 
     // stadium boards
     rr(c, -RAIL, -RAIL, W + RAIL * 2, H + RAIL * 2, 46);
@@ -848,7 +884,7 @@ function drawBall(c, x, y, r, rot) {
     ctx.fillStyle = COL.ground; ctx.fillRect(0, 0, cvs.width, cvs.height);
     ctx.drawImage(table, sx * dpr, sy * dpr);
     ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (ox + sx), dpr * (oy + sy));
-    if (stands && S.state === 'play' && S.goalT > 0 && ((S.goalT * 8) | 0) % 2 === 0) drawStands(ctx, stands.layers[1 + S.scorer]);
+    if (stands && S.state === 'play' && S.goalT > 0 && ((S.goalT * 8) | 0) % 2 === 0) drawStands(ctx, 1 + S.scorer);
 
     if (S.state !== 'menu') {
       const flip = S.mode === '2p';
@@ -1284,7 +1320,9 @@ function drawBall(c, x, y, r, rot) {
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(200, 20, 200, 92, 14) : ctx.rect(200, 20, 200, 92); ctx.fill();
     label('ПОЙМАНО', MID, 42, 15, '#8DA2B4');
     label(String(K.score).padStart(3, '0'), MID, 82, 50, '#FFD65A');
-    label('РЕКОРД', 70, 42, 15, 'rgba(255,255,255,.75)');
+    ctx.fillStyle = 'rgba(8,12,16,.88)';
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(20, 20, 100, 92, 14) : ctx.rect(20, 20, 100, 92); ctx.fill();
+    label('РЕКОРД', 70, 42, 15, '#8DA2B4');
     label(String(Math.max(K.best, K.score)), 70, 76, 32, '#fff');
     for (let i = 0; i < 3; i++) {
       const x = 470 + i * 44, y = 62, missed = i < K.misses;
@@ -1694,7 +1732,9 @@ function drawBall(c, x, y, r, rot) {
       if (r === undefined) { ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.stroke(); }
       else { ctx.fillStyle = r ? '#36C26B' : '#E5483F'; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill(); }
     }
-    label('РЕКОРД', 70, 38, 14, 'rgba(255,255,255,.75)');
+    ctx.fillStyle = 'rgba(8,12,16,.88)';
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(22, 18, 96, 78, 14) : ctx.rect(22, 18, 96, 78); ctx.fill();
+    label('РЕКОРД', 70, 38, 14, '#8DA2B4');
     label(P.best + '/5', 70, 70, 26, '#fff');
 
     if (P.state === 'result') {
